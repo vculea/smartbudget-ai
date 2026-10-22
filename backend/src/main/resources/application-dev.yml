@@ -1,0 +1,7 @@
+smartbudget:
+  seed:
+    enabled: ${SEED_ENABLED:true}
+
+logging:
+  level:
+    com.smartbudget: DEBUG

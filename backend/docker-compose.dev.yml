@@ -1,0 +1,7 @@
+# Optional override for local development with `mvn spring-boot:run`:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongo
+# Publishes MongoDB on the loopback interface only (never on 0.0.0.0).
+services:
+  mongo:
+    ports:
+      - "127.0.0.1:27017:27017"

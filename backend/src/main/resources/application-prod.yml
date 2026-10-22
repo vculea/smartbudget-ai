@@ -1,0 +1,19 @@
+smartbudget:
+  seed:
+    enabled: ${SEED_ENABLED:false}
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+logging:
+  level:
+    root: WARN
+    com.smartbudget: INFO
