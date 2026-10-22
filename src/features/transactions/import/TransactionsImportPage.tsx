@@ -319,11 +319,11 @@ export function TransactionsImportPage() {
               stickyHeader
               size="small"
               aria-label="Previzualizare import"
-              sx={{ minWidth: 960 }}
+              sx={{ minWidth: 960, tableLayout: "fixed" }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox">
+                  <TableCell padding="checkbox" sx={{ width: 48 }}>
                     <Checkbox
                       checked={allSelected}
                       indeterminate={selected.length > 0 && !allSelected}
@@ -338,12 +338,14 @@ export function TransactionsImportPage() {
                       }}
                     />
                   </TableCell>
-                  <TableCell>Rând</TableCell>
-                  <TableCell>Data</TableCell>
+                  <TableCell sx={{ width: 56 }}>Rând</TableCell>
+                  <TableCell sx={{ width: 160 }}>Data</TableCell>
                   <TableCell>Descriere</TableCell>
-                  <TableCell>Tip</TableCell>
-                  <TableCell>Categorie</TableCell>
-                  <TableCell align="right">Sumă</TableCell>
+                  <TableCell sx={{ width: 125 }}>Tip</TableCell>
+                  <TableCell sx={{ width: 190 }}>Categorie</TableCell>
+                  <TableCell align="right" sx={{ width: 100 }}>
+                    Sumă
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -496,9 +498,10 @@ const PreviewTableRow = memo(function PreviewTableRow({
         />
       </TableCell>
       <TableCell sx={{ color: "text.secondary" }}>{draft.sourceRow}</TableCell>
-      <TableCell sx={{ minWidth: 150 }}>
+      <TableCell>
         <TextField
           type="date"
+          fullWidth
           size="small"
           value={draft.transactionDate}
           error={!!show(errors.transactionDate)}
@@ -507,7 +510,7 @@ const PreviewTableRow = memo(function PreviewTableRow({
           slotProps={{ htmlInput: { "aria-label": label("Data") } }}
         />
       </TableCell>
-      <TableCell sx={{ minWidth: 220 }}>
+      <TableCell>
         <TextField
           fullWidth
           size="small"
@@ -518,8 +521,9 @@ const PreviewTableRow = memo(function PreviewTableRow({
           slotProps={{ htmlInput: { "aria-label": label("Descriere") } }}
         />
       </TableCell>
-      <TableCell sx={{ minWidth: 130 }}>
+      <TableCell>
         <Select
+          fullWidth
           size="small"
           value={draft.type}
           onChange={(e) =>
@@ -531,7 +535,7 @@ const PreviewTableRow = memo(function PreviewTableRow({
           <MenuItem value="INCOME">Venit</MenuItem>
         </Select>
       </TableCell>
-      <TableCell sx={{ minWidth: 200 }}>
+      <TableCell>
         <TextField
           select
           fullWidth
@@ -570,8 +574,9 @@ const PreviewTableRow = memo(function PreviewTableRow({
           ))}
         </TextField>
       </TableCell>
-      <TableCell align="right" sx={{ minWidth: 120 }}>
+      <TableCell align="right">
         <TextField
+          fullWidth
           size="small"
           value={draft.amount}
           error={!!show(errors.amount)}
