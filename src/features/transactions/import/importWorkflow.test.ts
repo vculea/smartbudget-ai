@@ -106,6 +106,60 @@ describe("loadImport", () => {
     expect(loaded.drafts[0]).toMatchObject({ description: "OMV 1923, CLUJ" });
   });
 
+  it("corectează cu titlul „Comerciant” când AI-ul alege coloana de status", async () => {
+    const ai = fakeAi({
+      detectColumns: vi.fn().mockResolvedValue({
+        headerRow: 1,
+        date: 0,
+        description: 2,
+        amount: 5,
+        descriptionCutAt: "Decontat",
+      }),
+    });
+    const rows = ["OMV 1923", "GHISEUL", "ghiseul.ro"].map(
+      (name, i) => `20-10-2026 13:50:1${i};${i};Decontat;${name}, CLUJ, CLUJ;10,5;10,5`,
+    );
+    const loaded = await loadImport(
+      csvFile(
+        [
+          "Data tranzacției;RRN;Status;Comerciant;Valoare cont;Valoare",
+          ...rows,
+        ].join("\n"),
+      ),
+      categories,
+      ai,
+    );
+    expect(loaded.mappingSource).toBe("ai");
+    expect(loaded.drafts.map((d) => d.description)).toEqual([
+      "OMV 1923",
+      "GHISEUL",
+      "ghiseul.ro",
+    ]);
+  });
+
+  it("respinge coloana de status (aceeași valoare pe toate rândurile) și folosește titlurile", async () => {
+    const ai = fakeAi({
+      detectColumns: vi.fn().mockResolvedValue({
+        headerRow: 1,
+        date: 0,
+        description: 2,
+        amount: 5,
+      }),
+    });
+    const rows = ["OMV 1923", "GHISEUL", "ghiseul.ro", "KAUFLAND"].map(
+      (name, i) => `20-10-2026 13:50:1${i};${i};Decontat;${name};10,5;10,5`,
+    );
+    const loaded = await loadImport(
+      csvFile(
+        ["Data tranzacției;RRN;Status;Comerciant;Valoare cont;Valoare", ...rows].join("\n"),
+      ),
+      categories,
+      ai,
+    );
+    expect(loaded.mappingSource).toBe("header");
+    expect(loaded.drafts[3]?.description).toBe("KAUFLAND");
+  });
+
   it("trimite AI-ului primele rânduri ca text", async () => {
     const detectColumns = vi.fn().mockResolvedValue({
       headerRow: 1,

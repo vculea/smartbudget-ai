@@ -399,6 +399,11 @@ export function checkMapping(
   const numeric = (row: Cell[]) =>
     amountColumns.some((c) => parseLooseNumber(row[c]) !== null);
   if (!mostly(hasDate) || !mostly(textual) || !mostly(numeric)) return null;
+  // O coloană cu aceeași valoare pe aproape toate rândurile (ex. „Decontat") e un status, nu comerciantul.
+  const distinct = new Set(sample.map((row) => normalize(cellText(row[description])))).size;
+  if (sample.length >= 8 ? distinct <= 2 : sample.length >= 4 && distinct <= 1) {
+    return null;
+  }
   return { ...mapping, headerRow: start };
 }
 

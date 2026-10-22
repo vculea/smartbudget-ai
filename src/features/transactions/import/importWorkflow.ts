@@ -35,7 +35,22 @@ export async function loadImport(
     aiFailure = getErrorMessage(error, "AI-ul nu este disponibil.");
   }
   if (aiMapping) {
-    const checked = checkMapping(rows, aiMapping);
+    let checked = checkMapping(rows, aiMapping);
+    // Titlul explicit al coloanei de descriere (Descriere, Comerciant...) bate alegerea AI-ului, care poate greși între rulări.
+    const byHeader = detectColumnsByHeader(rows);
+    if (
+      checked &&
+      byHeader?.description != null &&
+      byHeader.description !== checked.description
+    ) {
+      // Separatorul ales de AI se referea la coloana greșită; se deduce din coloana corectă.
+      checked =
+        checkMapping(rows, {
+          ...checked,
+          description: byHeader.description,
+          descriptionCutAt: null,
+        }) ?? checked;
+    }
     if (checked) {
       return {
         drafts: buildDrafts(rows, categories, checked),
