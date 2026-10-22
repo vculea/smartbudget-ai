@@ -50,7 +50,7 @@ docker compose up -d --build
 * UI: <http://localhost:8081> (nginx serves the React build and proxies `/api/` to the backend, same origin)
 * API: <http://localhost:8080/api/v1> · Swagger UI: <http://localhost:8080/swagger-ui.html> · Health: <http://localhost:8080/actuator/health>
 * Backend and frontend ports are published on `127.0.0.1` only. MongoDB has **no published port** (reachable only from the backend over the compose network), requires authentication and stores data in the named volume `mongo-data`.
-* `SEED_ENABLED=true` (default in `.env.example`) loads idempotent demo data. Categories are reference data the API cannot create: if the database has none, default categories are inserted even when seeding is disabled.
+* `SEED_ENABLED=true` (default in `.env.example`) loads idempotent demo data for `SEED_USER_ID`. Categories belong to each user: every new user gets the default set on first login.
 
 ### Local development (backend from Maven, MongoDB in Docker)
 
@@ -92,7 +92,7 @@ unavailable). No test calls a real AI provider: the AI interface is mocked, and 
 | `AI_BASE_URL` | `https://api.openai.com/v1` | any OpenAI-compatible base URL |
 | `AI_CONNECT_TIMEOUT` / `AI_READ_TIMEOUT` | `5s` / `30s` | provider timeouts |
 | `AI_JSON_MODE` | `true` | send `response_format: json_object` (set `false` if the provider rejects it) |
-| `SEED_ENABLED` | `true` in `dev`, `false` otherwise | demo data seeding (categories; user data only with `SEED_USER_ID`) |
+| `SEED_ENABLED` | `true` in `dev`, `false` otherwise | demo data seeding (only with `SEED_USER_ID`) |
 | `SEED_USER_ID` | – | internal id of the user who receives the demo transactions/budgets/goals |
 | `GOOGLE_CLIENT_ID` | – (required for sign-in) | OAuth client id of the Google sign-in; without it `POST /auth/google` answers 503 |
 | `JWT_SECRET` | – (random per start, with a warning) | signs the session tokens; at least 32 characters |
@@ -102,14 +102,14 @@ unavailable). No test calls a real AI provider: the AI interface is mocked, and 
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | comma separated origins |
 
 Indexes are created at startup (`auto-index-creation: true`): `{userId, transactionDate}`, `categoryId`, `type` on `transactions`;
-unique `{userId, month, categoryId}` on `budgets`; `userId` on `savings_goals`; unique `googleSub` on `users`; `{goalId, contributionDate}` on `goal_contributions`; unique `{name, type}` on `categories`.
+unique `{userId, month, categoryId}` on `budgets`; `userId` on `savings_goals`; unique `googleSub` on `users`; `{goalId, contributionDate}` on `goal_contributions`; unique `{userId, name, type}` on `categories`.
 
 ## Data formats
 
 * Money: JSON **number** with at most 2 decimals (`1234.50`). `BigDecimal` in Java and DTOs, BSON `Decimal128` in MongoDB. Input amounts
   must be between `0.01` and `1000000000` with ≤ 2 decimals.
 * Dates: `YYYY-MM-DD` (stored as UTC midnight). Months: `YYYY-MM`. Timestamps: ISO-8601 UTC instants.
-* Ids: MongoDB ObjectId strings (demo data uses readable ids such as `demo-cat-salary`).
+* Ids: MongoDB ObjectId strings (demo data uses readable ids such as `demo-tx-2026-10-03`).
 * Errors: `{ "status": 409, "error": "Conflict", "message": "...", "fieldErrors": { "amount": "..." }, "timestamp": "..." }`
   (`fieldErrors` only for validation errors).
 * Pages: `{ "content": [...], "page": 0, "size": 20, "totalElements": 57, "totalPages": 3 }` (`page` is 0-based).
@@ -128,7 +128,10 @@ Interactive documentation: Swagger UI (use *Authorize* with the token returned b
 | POST / PUT | `/transactions`, `/transactions/{id}` | 201 / 200; category must exist and match the transaction type (422 otherwise) |
 | DELETE | `/transactions/{id}` | 204 |
 | POST | `/transactions/scan` | multipart field `image` (JPEG/PNG/WebP, ≤ 8 MB, type checked from the file signature). The vision model reads amount, date, description and picks an existing category; returns `{ type, amount, description, transactionDate, categoryId }` (`amount`/`categoryId` may be `null`) **without saving**; the client reviews it and calls `POST /transactions`. 413 / 415 / 422 (nothing recognized) / 429 / 502 / 503 / 504 |
-| GET | `/categories` | |
+| GET | `/categories` | the caller's categories, sorted by type and name |
+| POST / PUT | `/categories`, `/categories/{id}` | 201 / 200; body `{ name, type, color?, icon? }`; 409 if the name already exists for that type (case-insensitive) or if the type changes while transactions/budgets use the category |
+| GET | `/categories/{id}/usage` | `{ transactions, budgets }` using the category |
+| DELETE | `/categories/{id}?replacementId=` | 204; when in use, `replacementId` (same type, 422 otherwise) is required (409 without it): transactions and budgets move there; a budget whose month already has one for the replacement is removed |
 | GET | `/budgets?month=YYYY-MM` | |
 | POST | `/budgets` | 201; 409 if the category already has a budget for that month; expense categories only |
 | GET | `/goals` | |
@@ -218,9 +221,12 @@ Sign-in is done **only with a Google account** (Google Identity Services, ID-tok
    lifetime `AUTH_TOKEN_TTL`, default 12 h). Missing/invalid/expired token: `401` with the usual error body.
 4. `GET /auth/me` returns the signed-in user. Public: `POST /auth/google`, `/actuator/health`, `/actuator/info` and the API docs.
 
-Transactions, budgets and goals (and the contributions of a goal) are scoped to the user: lists and aggregations only see the caller's
-documents, and reading/changing/deleting another user's id answers `404`. Categories are shared. Data created before accounts existed
-has no owner and is not visible to anyone (it stays in MongoDB; the old global unique budget index is dropped at startup).
+Transactions, budgets, goals (and the contributions of a goal) and categories are scoped to the user: lists and aggregations only see the caller's
+documents, and reading/changing/deleting another user's id answers `404`. A new user receives the 11 default categories on first login
+(`DefaultCategories`). Data created before accounts existed
+has no owner and is not visible to anyone (it stays in MongoDB; the old global unique budget and category indexes are dropped at startup).
+Categories that used to be shared (no `userId`) are migrated at startup by `CategoryOwnershipMigration`: every known user gets an own copy,
+their transactions and budgets are pointed at the copies, and the shared documents are removed.
 
 Google setup: <https://console.cloud.google.com/apis/credentials> → *Create credentials* → *OAuth client ID* → *Web application*;
 add the URLs the app is opened from under *Authorized JavaScript origins* (e.g. `http://localhost:8081`, `http://localhost:5173`).
@@ -228,8 +234,8 @@ No redirect URI is needed. The first time, the *OAuth consent screen* must be co
 
 ## Demo data
 
-`DemoDataSeeder` (dev profile or `SEED_ENABLED=true`) always inserts the 11 default categories when missing. With `SEED_USER_ID` set (the
-internal id of a user, visible in `GET /auth/me`) it also creates ~57 transactions over the current and previous two months,
+`DemoDataSeeder` (dev profile or `SEED_ENABLED=true`) needs `SEED_USER_ID` (the
+internal id of a user, visible in `GET /auth/me`): it makes sure that user has the default categories and creates ~57 transactions over the current and previous two months,
 budgets for 6 categories per month, and 4 goals (one completed) with contributions, all owned by that user. Every document has a deterministic id and is inserted
 only when missing, so restarts do not duplicate data. For the current month it yields budgets in all states: `NORMAL`
 (groceries, utilities, restaurants), `WARNING` (transport 82.5 %, rent exactly 100 %) and `EXCEEDED` (entertainment 128 %), plus spending in
@@ -251,8 +257,8 @@ the frontend types and additionally expose `topCategories` and `budgetUsedPercen
 
 ## Not implemented / known limitations
 
-* Authentication: sign-in with Google only (see "Authentication"). Transactions, budgets and goals belong to the signed-in user; categories are shared reference data.
-* No category CRUD, budget update/delete, goal update/delete or contribution listing endpoints (not required by the MVP).
+* Authentication: sign-in with Google only (see "Authentication"). Transactions, budgets, goals and categories belong to the signed-in user.
+* No budget update/delete, goal update/delete or contribution listing endpoints (not required by the MVP).
 * Real AI provider calls were not exercised in automated tests (by design); verify manually with a key in `AI_API_KEY`.
 * No per-client rate limiting of `/ai/insights` (each call is billable at the provider).
 * A completed goal could in theory accept a contribution that races with the completing one (no transactions/locking in the MVP).

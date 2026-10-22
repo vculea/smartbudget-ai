@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
+import com.smartbudget.category.DefaultCategories;
 import com.smartbudget.common.ApiException;
 import java.time.Instant;
 import java.util.List;
@@ -25,6 +26,7 @@ class AuthServiceTest {
     private final GoogleTokenVerifier google = mock(GoogleTokenVerifier.class);
     private final UserRepository users = mock(UserRepository.class);
     private final TokenService tokens = mock(TokenService.class);
+    private final DefaultCategories defaultCategories = mock(DefaultCategories.class);
     private final GoogleProfile profile = new GoogleProfile("sub-1", "Ana@Gmail.com", "Ana", "https://pic");
 
     @BeforeEach
@@ -54,6 +56,7 @@ class AuthServiceTest {
         verify(users).save(saved.capture());
         assertThat(saved.getValue().getGoogleSub()).isEqualTo("sub-1");
         assertThat(saved.getValue().getCreatedAt()).isEqualTo(TestClock.FIXED.instant());
+        verify(defaultCategories).createIfNone("u1");
     }
 
     @Test
@@ -71,6 +74,7 @@ class AuthServiceTest {
         assertThat(response.user().name()).isEqualTo("Ana");
         assertThat(existing.getCreatedAt()).isEqualTo(Instant.parse("2026-01-01T00:00:00Z"));
         assertThat(existing.getLastLoginAt()).isEqualTo(TestClock.FIXED.instant());
+        verify(defaultCategories, never()).createIfNone(any());
     }
 
     @Test
@@ -133,6 +137,6 @@ class AuthServiceTest {
 
     private AuthService service(List<String> allowedEmails) {
         return new AuthService(google, users, tokens, new AuthProperties("cid", null, null, allowedEmails),
-                TestClock.FIXED);
+                TestClock.FIXED, defaultCategories);
     }
 }

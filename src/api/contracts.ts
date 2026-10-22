@@ -4,6 +4,8 @@ import type {
   Budget,
   BudgetInput,
   Category,
+  CategoryInput,
+  CategoryUsage,
   ContributionInput,
   DashboardResponse,
   Goal,
@@ -46,6 +48,11 @@ export interface TransactionImportAiApi {
 
 export interface CategoriesApi {
   list(): Promise<Category[]>;
+  create(input: CategoryInput): Promise<Category>;
+  update(id: string, input: CategoryInput): Promise<Category>;
+  usage(id: string): Promise<CategoryUsage>;
+  /** Dacă categoria e folosită, `replacementId` (același tip) primește tranzacțiile și bugetele ei. */
+  remove(id: string, replacementId?: string): Promise<void>;
 }
 
 export interface BudgetsApi {

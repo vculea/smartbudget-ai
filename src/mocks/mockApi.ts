@@ -13,6 +13,7 @@ import type {
   AiRecommendation,
   Budget,
   CategoryExpense,
+  CategoryInput,
   DashboardResponse,
   Goal,
   Period,
@@ -362,10 +363,122 @@ export const mockTransactionImportAiApi: TransactionImportAiApi = {
   },
 };
 
+function categoryUsage(db: DemoDb, id: string) {
+  return {
+    transactions: db.transactions.filter((t) => t.categoryId === id).length,
+    budgets: db.budgets.filter((b) => b.categoryId === id).length,
+  };
+}
+
+function findCategory(db: DemoDb, id: string) {
+  const category = db.categories.find((c) => c.id === id);
+  if (!category) throw new ApiError("Categoria nu există.", 404);
+  return category;
+}
+
+function validateCategory(db: DemoDb, input: CategoryInput, id?: string) {
+  const name = input.name.trim();
+  if (!name)
+    throw new ApiError("Numele este obligatoriu.", 400, {
+      name: "Numele este obligatoriu",
+    });
+  const duplicate = db.categories.some(
+    (c) =>
+      c.id !== id &&
+      c.type === input.type &&
+      c.name.toLocaleLowerCase("ro") === name.toLocaleLowerCase("ro"),
+  );
+  if (duplicate)
+    throw new ApiError("Ai deja o categorie cu acest nume și tip.", 409);
+  return {
+    name,
+    type: input.type,
+    color: input.color || null,
+    icon: input.icon || null,
+  };
+}
+
 export const mockCategoriesApi: CategoriesApi = {
   async list() {
     await delay(0.5);
     return loadDb().categories;
+  },
+
+  async create(input) {
+    await delay();
+    const db = loadDb();
+    const category = {
+      id: String(db.nextId.category++),
+      ...validateCategory(db, input),
+    };
+    db.categories.push(category);
+    saveDb(db);
+    return category;
+  },
+
+  async update(id, input) {
+    await delay();
+    const db = loadDb();
+    const category = findCategory(db, id);
+    const usage = categoryUsage(db, id);
+    if (
+      input.type !== category.type &&
+      (usage.transactions > 0 || usage.budgets > 0)
+    ) {
+      throw new ApiError(
+        "Tipul categoriei nu poate fi schimbat cât timp are tranzacții sau bugete.",
+        409,
+      );
+    }
+    Object.assign(category, validateCategory(db, input, id));
+    saveDb(db);
+    return category;
+  },
+
+  async usage(id) {
+    await delay(0.5);
+    const db = loadDb();
+    findCategory(db, id);
+    return categoryUsage(db, id);
+  },
+
+  async remove(id, replacementId) {
+    await delay();
+    const db = loadDb();
+    const category = findCategory(db, id);
+    const usage = categoryUsage(db, id);
+    if ((usage.transactions > 0 || usage.budgets > 0) && !replacementId) {
+      throw new ApiError(
+        `Categoria este folosită de ${usage.transactions} tranzacții și ${usage.budgets} bugete. Alege categoria în care să fie mutate.`,
+        409,
+      );
+    }
+    if (replacementId) {
+      if (replacementId === id)
+        throw new ApiError(
+          "Alege o altă categorie decât cea pe care o ștergi.",
+          400,
+        );
+      const replacement = findCategory(db, replacementId);
+      if (replacement.type !== category.type)
+        throw new ApiError("Categoria nouă trebuie să fie de același tip.", 422);
+      db.transactions.forEach((t) => {
+        if (t.categoryId === id) t.categoryId = replacementId;
+      });
+      db.budgets = db.budgets.filter(
+        (b) =>
+          b.categoryId !== id ||
+          !db.budgets.some(
+            (other) =>
+              other.categoryId === replacementId && other.month === b.month,
+          ),
+      );
+      db.budgets.forEach((b) => {
+        if (b.categoryId === id) b.categoryId = replacementId;
+      });
+    }
+    db.categories = db.categories.filter((c) => c.id !== id);
+    saveDb(db);
   },
 };
 

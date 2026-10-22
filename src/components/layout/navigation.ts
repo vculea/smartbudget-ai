@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Settings,
   Sparkles,
+  Tags,
   Target,
   Wallet,
   type LucideIcon,
@@ -19,6 +20,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/transactions", label: "Tranzacții", icon: ArrowLeftRight },
   { to: "/budgets", label: "Bugete", icon: Wallet },
   { to: "/goals", label: "Obiective", icon: Target },
+  { to: "/categories", label: "Categorii", icon: Tags },
   { to: "/ai-insights", label: "AI Coach", icon: Sparkles },
   { to: "/settings/ai", label: "Setări AI", icon: Settings },
 ];

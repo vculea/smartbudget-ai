@@ -23,8 +23,9 @@ import com.smartbudget.budget.Budget;
 import com.smartbudget.budget.BudgetRepository;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryRepository;
+import com.smartbudget.category.DefaultCategories;
 import com.smartbudget.common.ApiException;
-import com.smartbudget.config.DefaultCategoriesInitializer;
+import com.smartbudget.config.CategoryOwnershipMigration;
 import com.smartbudget.config.DemoDataSeeder;
 import com.smartbudget.goal.GoalContributionRepository;
 import com.smartbudget.goal.SavingsGoalRepository;
@@ -96,9 +97,9 @@ class ApiIntegrationTest {
         goals.deleteAll();
         categories.deleteAll();
         Mockito.reset(ai);
-        categories.save(new Category("salary", "Salariu", TransactionType.INCOME, "#10b981", "briefcase"));
-        categories.save(new Category("food", "Alimente", TransactionType.EXPENSE, "#4f46e5", "cart"));
-        categories.save(new Category("fun", "Divertisment", TransactionType.EXPENSE, "#ec4899", "film"));
+        categories.save(new Category("salary", TestUser.ID, "Salariu", TransactionType.INCOME, "#10b981", "briefcase"));
+        categories.save(new Category("food", TestUser.ID, "Alimente", TransactionType.EXPENSE, "#4f46e5", "cart"));
+        categories.save(new Category("fun", TestUser.ID, "Divertisment", TransactionType.EXPENSE, "#ec4899", "film"));
     }
 
     @Test
@@ -107,6 +108,105 @@ class ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[?(@.id=='food')].name").value("Alimente"));
+    }
+
+    @Test
+    void categoryCrudLifecycle() throws Exception {
+        MvcResult created = mvc.perform(post("/api/v1/categories").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson(" Abonamente ", "EXPENSE", "#123abc")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Abonamente"))
+                .andExpect(jsonPath("$.color").value("#123abc"))
+                .andReturn();
+        String id = json.readTree(created.getResponse().getContentAsString()).get("id").asText();
+        assertThat(categories.findById(id)).get().extracting(Category::getUserId).isEqualTo(TestUser.ID);
+
+        mvc.perform(post("/api/v1/categories").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("abonamente", "EXPENSE", null)))
+                .andExpect(status().isConflict());
+        // the same name is allowed for the other type
+        mvc.perform(post("/api/v1/categories").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Abonamente", "INCOME", null)))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/categories").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("", "EXPENSE", "red")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.name").exists())
+                .andExpect(jsonPath("$.fieldErrors.color").exists());
+
+        mvc.perform(put("/api/v1/categories/" + id).contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Abonamente lunare", "INCOME", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Abonamente lunare"))
+                .andExpect(jsonPath("$.type").value("INCOME"))
+                .andExpect(jsonPath("$.color").doesNotExist());
+        mvc.perform(put("/api/v1/categories/" + id).contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Salariu", "INCOME", null)))
+                .andExpect(status().isConflict());
+
+        mvc.perform(delete("/api/v1/categories/" + id)).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/categories/" + id)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/categories")).andExpect(jsonPath("$.length()").value(4));
+    }
+
+    @Test
+    void categoryInUseKeepsItsTypeAndMovesItsDataWhenDeleted() throws Exception {
+        String txId = createTransaction("EXPENSE", "80", "Cinema", "2026-09-20", "fun");
+        seedBudget("fun", "2026-09", "100");
+        seedBudget("fun", "2026-10", "200");
+        seedBudget("food", "2026-10", "900");
+
+        mvc.perform(get("/api/v1/categories/fun/usage"))
+                .andExpect(jsonPath("$.transactions").value(1))
+                .andExpect(jsonPath("$.budgets").value(2));
+        mvc.perform(put("/api/v1/categories/fun").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Distracție", "INCOME", null)))
+                .andExpect(status().isConflict());
+        mvc.perform(put("/api/v1/categories/fun").contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Distracție", "EXPENSE", "#000000")))
+                .andExpect(status().isOk());
+
+        mvc.perform(delete("/api/v1/categories/fun")).andExpect(status().isConflict());
+        mvc.perform(delete("/api/v1/categories/fun").param("replacementId", "salary"))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(delete("/api/v1/categories/fun").param("replacementId", "fun"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/v1/categories/fun").param("replacementId", "food"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/transactions/" + txId)).andExpect(jsonPath("$.categoryId").value("food"));
+        // September moved to food; October already had a food budget, so fun's was removed
+        assertThat(budgets.findAll()).extracting(Budget::getMonth, Budget::getCategoryId, b -> b.getLimitAmount().intValue())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("2026-09", "food", 100),
+                        org.assertj.core.groups.Tuple.tuple("2026-10", "food", 900));
+        assertThat(categories.existsById("fun")).isFalse();
+    }
+
+    @Test
+    void categoriesArePrivateToTheirOwner() throws Exception {
+        RequestPostProcessor other = user("user-2");
+        categories.save(new Category("food-2", "user-2", "Alimente", TransactionType.EXPENSE, null, null));
+
+        mvc.perform(get("/api/v1/categories").with(other))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value("food-2"));
+        mvc.perform(post("/api/v1/transactions").with(other).contentType(MediaType.APPLICATION_JSON)
+                        .content(transactionJson("EXPENSE", "10", "Not mine", "2026-09-10", "food")))
+                .andExpect(status().isNotFound());
+        mvc.perform(put("/api/v1/categories/food").with(other).contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson("Hijacked", "EXPENSE", null)))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/categories/food").with(other)).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/categories/fun").param("replacementId", "food-2"))
+                .andExpect(status().isNotFound());
+        assertThat(categories.count()).isEqualTo(4);
+    }
+
+    private static String categoryJson(String name, String type, String color) {
+        return color == null
+                ? "{\"name\":\"%s\",\"type\":\"%s\"}".formatted(name, type)
+                : "{\"name\":\"%s\",\"type\":\"%s\",\"color\":\"%s\"}".formatted(name, type, color);
     }
 
     @Test
@@ -375,8 +475,8 @@ class ApiIntegrationTest {
     @Test
     void demoSeederIsIdempotentAndProducesAllBudgetStatuses() throws Exception {
         categories.deleteAll();
-        DemoDataSeeder seeder = new DemoDataSeeder(categories, transactions, budgets, goals, contributions,
-                TestClock.FIXED, TestUser.ID);
+        DemoDataSeeder seeder = new DemoDataSeeder(new DefaultCategories(categories), transactions, budgets, goals,
+                contributions, TestClock.FIXED, TestUser.ID);
 
         seeder.run(null);
         long[] first = counts();
@@ -397,20 +497,53 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void defaultCategoriesAreInsertedOnlyIntoAnEmptyCollection() throws Exception {
+    void newUsersGetTheStarterCategoriesOnlyOnce() throws Exception {
+        DefaultCategories defaults = new DefaultCategories(categories);
+
+        defaults.createIfNone("user-2");
+        assertThat(categories.findByUserId("user-2", org.springframework.data.domain.Sort.unsorted())).hasSize(11);
+        String bonusId = categories.findByUserIdAndNameAndType("user-2", "Bonusuri", TransactionType.INCOME)
+                .orElseThrow().getId();
+        categories.deleteById(bonusId);
+        defaults.createIfNone("user-2");
+        assertThat(categories.countByUserId("user-2")).isEqualTo(10);
+        assertThat(categories.countByUserId(TestUser.ID)).isEqualTo(3);
+    }
+
+    @Test
+    void sharedCategoriesAreCopiedToEveryUserAndTheirDataIsRepointed() throws Exception {
         categories.deleteAll();
-        DefaultCategoriesInitializer initializer = new DefaultCategoriesInitializer(categories);
+        mongoTemplate.getCollection("categories").insertOne(new Document("_id", "shared-food")
+                .append("name", "Alimente").append("type", "EXPENSE").append("color", "#4f46e5"));
+        mongoTemplate.getCollection("categories").insertOne(new Document("_id", "shared-salary")
+                .append("name", "Salariu").append("type", "INCOME"));
+        seedTransaction("shared-food", TransactionType.EXPENSE, "50.00", "2026-09-05");
+        seedBudget("shared-food", "2026-09", "500");
+        Transaction otherTx = new Transaction();
+        otherTx.setUserId("user-2");
+        otherTx.setType(TransactionType.INCOME);
+        otherTx.setAmount(new BigDecimal("100.00"));
+        otherTx.setDescription("Salariu");
+        otherTx.setTransactionDate(LocalDate.parse("2026-09-01"));
+        otherTx.setCategoryId("shared-salary");
+        transactions.save(otherTx);
+        CategoryOwnershipMigration migration = new CategoryOwnershipMigration(mongoTemplate, categories);
 
-        initializer.run(null);
-        assertThat(categories.count()).isEqualTo(11);
+        migration.run(null);
+        migration.run(null);
 
-        categories.deleteById("demo-cat-bonus");
-        initializer.run(null);
-        assertThat(categories.count()).isEqualTo(10);
-
-        mvc.perform(get("/api/v1/categories"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(10));
+        assertThat(categories.existsById("shared-food")).isFalse();
+        assertThat(categories.countByUserId(TestUser.ID)).isEqualTo(2);
+        assertThat(categories.countByUserId("user-2")).isEqualTo(2);
+        String myFood = categories.findByUserIdAndNameAndType(TestUser.ID, "Alimente", TransactionType.EXPENSE)
+                .orElseThrow().getId();
+        String theirSalary = categories.findByUserIdAndNameAndType("user-2", "Salariu", TransactionType.INCOME)
+                .orElseThrow().getId();
+        assertThat(transactions.findAll()).extracting(Transaction::getCategoryId)
+                .containsExactlyInAnyOrder(myFood, theirSalary);
+        assertThat(budgets.findAll()).extracting(Budget::getCategoryId).containsExactly(myFood);
+        mvc.perform(get("/api/v1/dashboard").param("month", "2026-09"))
+                .andExpect(jsonPath("$.totalExpenses").value(50.0));
     }
 
     private long[] counts() {
@@ -499,9 +632,13 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/v1/dashboard").with(other).param("month", "2026-09"))
                 .andExpect(jsonPath("$.totalExpenses").value(0.0));
 
-        // the same budget (category + month) is allowed for another user
+        // the same budget (category name + month) is allowed for another user, on their own category
+        categories.save(new Category("food-2", "user-2", "Alimente", TransactionType.EXPENSE, null, null));
         mvc.perform(post("/api/v1/budgets").with(other).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"categoryId\":\"food\",\"month\":\"2026-09\",\"limitAmount\":300}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/budgets").with(other).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryId\":\"food-2\",\"month\":\"2026-09\",\"limitAmount\":300}"))
                 .andExpect(status().isCreated());
 
         // the owner still has everything

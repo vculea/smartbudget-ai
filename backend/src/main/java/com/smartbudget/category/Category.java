@@ -5,12 +5,14 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+/** Every user owns their categories; names are unique per user and transaction type. */
 @Document(collection = "categories")
-@CompoundIndex(name = "uk_category_name_type", def = "{'name': 1, 'type': 1}", unique = true)
+@CompoundIndex(name = "uk_category_user_name_type", def = "{'userId': 1, 'name': 1, 'type': 1}", unique = true)
 public class Category {
 
     @Id
     private String id;
+    private String userId;
     private String name;
     private TransactionType type;
     private String color;
@@ -27,12 +29,25 @@ public class Category {
         this.icon = icon;
     }
 
+    public Category(String id, String userId, String name, TransactionType type, String color, String icon) {
+        this(id, name, type, color, icon);
+        this.userId = userId;
+    }
+
     public String getId() {
         return id;
     }
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getName() {

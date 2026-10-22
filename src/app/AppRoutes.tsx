@@ -28,6 +28,11 @@ const BudgetsPage = lazy(() =>
 const GoalsPage = lazy(() =>
   import("../features/goals/GoalsPage").then((m) => ({ default: m.GoalsPage })),
 );
+const CategoriesPage = lazy(() =>
+  import("../features/categories/CategoriesPage").then((m) => ({
+    default: m.CategoriesPage,
+  })),
+);
 const AiInsightsPage = lazy(() =>
   import("../features/ai-insights/AiInsightsPage").then((m) => ({
     default: m.AiInsightsPage,
@@ -51,8 +56,10 @@ export function AppRoutes() {
           <Route
             path="/transactions/import"
             element={<TransactionsImportPage />}
-          />          <Route path="/budgets" element={<BudgetsPage />} />
+          />
+          <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/goals" element={<GoalsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/ai-insights" element={<AiInsightsPage />} />
           <Route path="/settings/ai" element={<AiSettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />

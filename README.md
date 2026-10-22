@@ -22,7 +22,7 @@ Comenzile `docker compose` se rulează din `backend/`, nu din rădăcina reposit
 - Aplicația: <http://localhost:8081> (UI-ul apelează `/api/v1`, proxy nginx către backend; același origin, fără CORS)
 - API / Swagger: <http://localhost:8080/api/v1> · <http://localhost:8080/swagger-ui.html>
 - Autentificare: doar cu contul Google; vezi secțiunea **Autentificare** de mai jos (necesită `GOOGLE_CLIENT_ID` în `backend/.env`).
-- Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) încarcă categoriile; datele demo ale unui utilizator, doar cu `SEED_USER_ID`.
+- Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) cu `SEED_USER_ID` încarcă datele demo ale acelui utilizator. Categoriile implicite se creează automat la primul login al fiecărui utilizator.
 - Oprire păstrând datele: `docker compose down`; ștergerea datelor: `docker compose down -v`.
 
 ## Dezvoltare locală (Vite + Maven + MongoDB în Docker)
@@ -135,7 +135,7 @@ Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example
 
 ## Autentificare (doar cu contul Google)
 
-Aplicația cere autentificare; fiecare utilizator vede doar propriile tranzacții, bugete și obiective (categoriile sunt comune). Nu există parolă proprie: doar „Sign in with Google”.
+Aplicația cere autentificare; fiecare utilizator vede doar propriile tranzacții, bugete, obiective și categorii. Nu există parolă proprie: doar „Sign in with Google”.
 
 1. În <https://console.cloud.google.com/apis/credentials> creează un **OAuth client ID** de tip *Web application* (la prima utilizare configurează și *OAuth consent screen*; în modul *Testing* adaugă-ți contul Google ca test user).
 2. La *Authorized JavaScript origins* adaugă adresele de pe care deschizi aplicația: `http://localhost:8081` (Docker) și/sau `http://localhost:5173` (`npm run dev`). Nu e nevoie de redirect URI.
@@ -143,6 +143,12 @@ Aplicația cere autentificare; fiecare utilizator vede doar propriile tranzacți
 4. Opțional, `ALLOWED_EMAILS=tu@gmail.com,altcineva@gmail.com` limitează cine se poate autentifica (gol = orice cont Google verificat).
 
 Fluxul: butonul Google returnează un ID token → `POST /auth/google` îl verifică (semnătură, emitent, audiență, expirare, e-mail verificat) și întoarce un token de sesiune (12 h) trimis apoi ca `Authorization: Bearer`. Sesiunea se păstrează în `localStorage`; la 401 utilizatorul este readus la pagina de login. Modul demo (`VITE_DEMO_MODE=true`) rămâne fără autentificare.
+
+## Categorii
+
+Fiecare utilizator are propriile categorii. La primul login primește un set implicit (Salariu, Alimente, Transport, …), pe care îl poate apoi modifica liber din pagina **Categorii**: adaugă, redenumește, schimbă culoarea sau tipul, șterge. Numele sunt unice pe tip (fără să conteze literele mari/mici). Tipul se poate schimba doar cât timp categoria nu are tranzacții sau bugete. La ștergerea unei categorii folosite alegi categoria (de același tip) în care se mută tranzacțiile și bugetele ei; dacă acea categorie are deja buget într-o lună, bugetul categoriei șterse din luna respectivă se elimină.
+
+La pornire, backendul migrează automat categoriile comune din versiunile anterioare: fiecare utilizator primește o copie proprie, iar tranzacțiile și bugetele lui sunt mutate pe copii.
 
 ## Mod demo
 
@@ -168,7 +174,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
 

@@ -1,5 +1,6 @@
 package com.smartbudget.auth;
 
+import com.smartbudget.category.DefaultCategories;
 import com.smartbudget.common.ApiException;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,14 +16,16 @@ public class AuthService {
     private final TokenService tokens;
     private final AuthProperties properties;
     private final Clock clock;
+    private final DefaultCategories defaultCategories;
 
     public AuthService(GoogleTokenVerifier googleVerifier, UserRepository users, TokenService tokens,
-                       AuthProperties properties, Clock clock) {
+                       AuthProperties properties, Clock clock, DefaultCategories defaultCategories) {
         this.googleVerifier = googleVerifier;
         this.users = users;
         this.tokens = tokens;
         this.properties = properties;
         this.clock = clock;
+        this.defaultCategories = defaultCategories;
     }
 
     /** Signs in (and registers on first login) the owner of a valid Google ID token. */
@@ -52,7 +55,8 @@ public class AuthService {
 
     private User save(User user, GoogleProfile profile) {
         Instant now = clock.instant();
-        if (user.getId() == null) {
+        boolean firstLogin = user.getId() == null;
+        if (firstLogin) {
             user.setGoogleSub(profile.subject());
             user.setCreatedAt(now);
         }
@@ -60,6 +64,10 @@ public class AuthService {
         user.setName(profile.name());
         user.setPictureUrl(profile.pictureUrl());
         user.setLastLoginAt(now);
-        return users.save(user);
+        User saved = users.save(user);
+        if (firstLogin) {
+            defaultCategories.createIfNone(saved.getId());
+        }
+        return saved;
     }
 }

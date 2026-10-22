@@ -33,14 +33,19 @@ export type StoredGoal = Omit<Goal, "status" | "progressPercentage">;
 
 export interface DemoDb {
   version: number;
-  nextId: { transaction: number; budget: number; goal: number };
+  nextId: {
+    transaction: number;
+    budget: number;
+    goal: number;
+    category: number;
+  };
   categories: Category[];
   transactions: StoredTransaction[];
   budgets: StoredBudget[];
   goals: StoredGoal[];
 }
 
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const CATEGORY = {
   groceries: "1",
@@ -406,8 +411,9 @@ export function createSeed(): DemoDb {
       transaction: nextTxId,
       budget: nextBudgetId,
       goal: goals.length + 1,
+      category: categories.length + 1,
     },
-    categories,
+    categories: categories.map((c) => ({ ...c })),
     transactions,
     budgets,
     goals,
