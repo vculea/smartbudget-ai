@@ -4,6 +4,7 @@ import type {
   CategoriesApi,
   DashboardApi,
   GoalsApi,
+  TransactionImportAiApi,
   TransactionsApi,
 } from "../api/contracts";
 import { ApiError } from "../api/errors";
@@ -268,6 +269,21 @@ export const mockTransactionsApi: TransactionsApi = {
     return toTransaction(db, stored);
   },
 
+  async createMany(inputs) {
+    await delay();
+    const db = loadDb();
+    inputs.forEach((input) => validateTransaction(db, input));
+    inputs.forEach((input) => {
+      db.transactions.push({
+        id: String(db.nextId.transaction++),
+        ...input,
+        description: input.description.trim(),
+      });
+    });
+    saveDb(db);
+    return { created: inputs.length };
+  },
+
   async update(id, input) {
     await delay();
     const db = loadDb();
@@ -307,6 +323,42 @@ export const mockTransactionsApi: TransactionsApi = {
       transactionDate: todayIso(),
       categoryId: category?.id ?? null,
     };
+  },
+};
+
+const MOCK_KEYWORDS: [string, string][] = [
+  ["mega image|kaufland|lidl|carrefour|auchan|profi|penny", CATEGORY.groceries],
+  ["uber|bolt|petrom|omv|rompetrol|metrou|stb", CATEGORY.transport],
+  ["netflix|spotify|hbo|youtube", CATEGORY.subscriptions],
+  ["cinema|concert|teatru", CATEGORY.entertainment],
+  ["restaurant|pizza|kfc|mcdonald|starbucks|cafea", CATEGORY.restaurants],
+  ["farmacie|catena|medic", CATEGORY.health],
+  ["salariu", CATEGORY.salary],
+];
+
+// Mock: fără model AI; recunoaște doar câteva comercianți uzuali, restul rămân nesigure ca să poată fi testat fluxul.
+export const mockTransactionImportAiApi: TransactionImportAiApi = {
+  async detectColumns() {
+    await delay();
+    throw new ApiError(
+      "Modul demo nu are un model AI; coloanele se recunosc după antet.",
+      503,
+    );
+  },
+  async suggestCategories(items) {
+    await delay();
+    const db = loadDb();
+    return items.map(({ index, description, type }) => {
+      const text = normalize(description);
+      const match = MOCK_KEYWORDS.find(([words]) =>
+        new RegExp(words).test(text),
+      );
+      const category = db.categories.find((c) => c.id === match?.[1]);
+      return {
+        index,
+        categoryId: category?.type === type ? category.id : null,
+      };
+    });
   },
 };
 

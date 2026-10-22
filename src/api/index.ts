@@ -5,6 +5,7 @@ import {
   mockCategoriesApi,
   mockDashboardApi,
   mockGoalsApi,
+  mockTransactionImportAiApi,
   mockTransactionsApi,
 } from "../mocks/mockApi";
 import type {
@@ -13,6 +14,7 @@ import type {
   CategoriesApi,
   DashboardApi,
   GoalsApi,
+  TransactionImportAiApi,
   TransactionsApi,
 } from "./contracts";
 import { httpAiInsightsApi } from "./services/aiInsightsApi";
@@ -20,9 +22,11 @@ import { httpBudgetsApi } from "./services/budgetsApi";
 import { httpCategoriesApi } from "./services/categoriesApi";
 import { httpDashboardApi } from "./services/dashboardApi";
 import { httpGoalsApi } from "./services/goalsApi";
+import { httpImportAiApi } from "./services/importAiApi";
 import { httpTransactionsApi } from "./services/transactionsApi";
 import {
   localAiInsightsApi,
+  localImportAiApi,
   localScanTransaction,
 } from "./services/localAiApi";
 import { getBrowserAiConfig, loadAiSettings } from "../config/aiSettings";
@@ -40,6 +44,19 @@ export const transactionsApi: TransactionsApi = env.demoMode
         getBrowserAiConfig(loadAiSettings())
           ? localScanTransaction(image)
           : httpTransactionsApi.scan(image),
+    };
+// Importul CSV/Excel folosește AI-ul ales în Setări AI (server, model local sau cheie proprie).
+export const transactionImportAiApi: TransactionImportAiApi = env.demoMode
+  ? mockTransactionImportAiApi
+  : {
+      detectColumns: (rows) =>
+        getBrowserAiConfig(loadAiSettings())
+          ? localImportAiApi.detectColumns(rows)
+          : httpImportAiApi.detectColumns(rows),
+      suggestCategories: (items) =>
+        getBrowserAiConfig(loadAiSettings())
+          ? localImportAiApi.suggestCategories(items)
+          : httpImportAiApi.suggestCategories(items),
     };
 export const categoriesApi: CategoriesApi = env.demoMode
   ? mockCategoriesApi

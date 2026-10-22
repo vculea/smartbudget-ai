@@ -99,6 +99,17 @@ AI_VISION_MODEL=gemma4:26b    # sau llava, llama3.2-vision, qwen2.5vl (ollama pu
 
 Fără `AI_VISION_MODEL` se folosește `AI_MODEL`. Citirea locală durează de obicei zeci de secunde (primul apel încarcă modelul); folosește `AI_READ_TIMEOUT=120s`. În modul demo, scanarea întoarce o tranzacție de exemplu.
 
+### Import din CSV / Excel
+
+În **Tranzacții → Importă CSV / Excel** încarci un fișier `.csv` sau `.xlsx` (prima foaie, max. 5 MB și 1000 de rânduri). Fișierul se citește în browser, apoi **AI-ul ales în Setări AI** (server, model local sau cheie proprie):
+
+1. recunoaște coloanele (data, descrierea, suma sau debit/credit, tipul, categoria, formatul datei și rândul cu antet) din primele rânduri, deci fișierul nu trebuie să respecte un format anume (`POST /transactions/import/columns`);
+2. propune categoria fiecărei tranzacții dintre categoriile tale, pe loturi de 40 de descrieri unice (`POST /transactions/import/categories`). Unde AI-ul nu e sigur, categoria rămâne goală și rândul e marcat „AI-ul nu a știut – alege categoria”; **Adaugă** se activează abia după ce alegi categoria sau debifezi rândul.
+
+Cu modelul local / cheia proprie, backendul construiește prompturile și validează răspunsul (`.../columns|categories/prompt` și `.../result`), ca la citirea bonurilor. Modelul primește doar primele rânduri și descrierile tranzacțiilor. Dacă AI-ul nu răspunde, coloanele se recunosc după titluri (`Data`, `Descriere`, `Suma`/`Debit`/`Credit`, `Tip`, `Categorie`) și categoriile rămân de ales manual; în modul demo nu există model AI, doar o potrivire simplă după comercianți uzuali.
+
+În previzualizare poți corecta data, descrierea, tipul, categoria și suma sau debifa rânduri; **Adaugă N tranzacții** salvează tot printr-un singur apel `POST /transactions/bulk` (totul sau nimic).
+
 ## Model AI ales din interfață (Setări AI)
 
 În pagina **Setări AI** (meniul din stânga) alegi unde rulează AI-ul, separat pentru fiecare browser (setările se păstrează în `localStorage`):
@@ -157,7 +168,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
 

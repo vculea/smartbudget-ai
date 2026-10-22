@@ -18,6 +18,13 @@ export const httpTransactionsApi: TransactionsApi = {
     const { data } = await http.post<Transaction>("/transactions", input);
     return data;
   },
+  async createMany(inputs) {
+    const { data } = await http.post<{ created: number }>(
+      "/transactions/bulk",
+      { transactions: inputs },
+    );
+    return data;
+  },
   async update(id, input) {
     const { data } = await http.put<Transaction>(`/transactions/${id}`, input);
     return data;

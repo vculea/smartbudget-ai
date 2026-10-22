@@ -69,6 +69,15 @@ public class TransactionController {
         return service.create(request);
     }
 
+    @PostMapping("/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create several transactions at once",
+            description = "Used by the CSV/Excel import after the user reviewed the preview. Max 1000 items. "
+                    + "All-or-nothing: if any item is invalid (e.g. 422 category/type mismatch) nothing is saved.")
+    public BulkTransactionResponse createBulk(@Valid @RequestBody BulkTransactionRequest request) {
+        return service.createAll(request);
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Replace a transaction")
     public TransactionResponse update(@PathVariable String id, @Valid @RequestBody TransactionRequest request) {

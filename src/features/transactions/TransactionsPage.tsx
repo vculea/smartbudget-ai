@@ -1,6 +1,7 @@
 import { Box, Button, Card, TablePagination } from "@mui/material";
-import { Plus, ReceiptText } from "lucide-react";
+import { FileUp, Plus, ReceiptText } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getErrorMessage } from "../../api";
 import { ConfirmDialog } from "../../components/common/ConfirmDialog";
 import { EmptyState } from "../../components/common/EmptyState";
@@ -29,6 +30,7 @@ import { TransactionsTable } from "./TransactionsTable";
 const PAGE_SIZES = [10, 20, 50];
 
 export function TransactionsPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] =
     useState<TransactionFilterValues>(EMPTY_FILTERS);
   const [page, setPage] = useState(0);
@@ -108,13 +110,22 @@ export function TransactionsPage() {
         title="Tranzacții"
         subtitle="Urmărește veniturile și cheltuielile tale."
         actions={
-          <Button
-            variant="contained"
-            startIcon={<Plus size={18} />}
-            onClick={openCreate}
-          >
-            Adaugă tranzacție
-          </Button>
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<FileUp size={18} />}
+              onClick={() => navigate("/transactions/import")}
+            >
+              Importă CSV / Excel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={18} />}
+              onClick={openCreate}
+            >
+              Adaugă tranzacție
+            </Button>
+          </>
         }
       />
 

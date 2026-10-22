@@ -38,6 +38,38 @@ export interface TransactionScan {
   categoryId: string | null;
 }
 
+/**
+ * Ce conține fiecare coloană a fișierului importat (indici de la 0; `null` = lipsește).
+ * `headerRow` este numărul (de la 1) al rândului cu titluri, `0` dacă fișierul nu are antet.
+ */
+export interface ImportColumnMapping {
+  headerRow: number;
+  date?: number | null;
+  description?: number | null;
+  amount?: number | null;
+  debit?: number | null;
+  credit?: number | null;
+  type?: number | null;
+  category?: number | null;
+  /** Cum sunt scrise datele text: zi-lună-an, lună-zi-an sau an-lună-zi. */
+  dateFormat?: "DMY" | "MDY" | "YMD";
+  /** Din descriere se păstrează doar textul de dinaintea primei apariții a acestui separator (ex.: `,`). */
+  descriptionCutAt?: string | null;
+}
+
+/** O tranzacție din fișier pentru care AI-ul trebuie să aleagă categoria. */
+export interface ImportCategoryItem {
+  index: number;
+  description: string;
+  type: TransactionType;
+}
+
+/** `categoryId` este `null` când AI-ul nu a fost sigur; utilizatorul alege atunci categoria. */
+export interface ImportCategorySuggestion {
+  index: number;
+  categoryId: string | null;
+}
+
 /** Parametrii pentru `GET /transactions`. `page` începe de la 0. */
 export interface TransactionQuery {
   page: number;

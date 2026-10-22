@@ -153,4 +153,56 @@ class TransactionServiceTest {
         assertThatThrownBy(() -> service.list(filter, pageable))
                 .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
+
+    @Test
+    void createAllSavesEveryItemForTheCurrentUser() {
+        when(categories.getByIds(any())).thenReturn(java.util.Map.of(
+                "food", new Category("food", "Alimente", TransactionType.EXPENSE, null, null),
+                "salary", new Category("salary", "Salariu", TransactionType.INCOME, null, null)));
+
+        BulkTransactionResponse response = service.createAll(new BulkTransactionRequest(java.util.List.of(
+                new TransactionRequest(TransactionType.EXPENSE, new BigDecimal("12.5"), " Cafea ", LocalDate.of(2026, 10, 3), "food"),
+                new TransactionRequest(TransactionType.INCOME, new BigDecimal("1000"), "Salariu", LocalDate.of(2026, 10, 1), "salary"))));
+
+        assertThat(response.created()).isEqualTo(2);
+        org.mockito.ArgumentCaptor<Iterable<Transaction>> saved = org.mockito.ArgumentCaptor.forClass(Iterable.class);
+        verify(repository).saveAll(saved.capture());
+        assertThat(saved.getValue()).hasSize(2).allSatisfy(tx -> {
+            assertThat(tx.getUserId()).isEqualTo(TestUser.ID);
+            assertThat(tx.getCreatedAt()).isEqualTo(TestClock.FIXED.instant());
+        }).first().satisfies(tx -> {
+            assertThat(tx.getDescription()).isEqualTo("Cafea");
+            assertThat(tx.getAmount()).isEqualByComparingTo("12.50");
+        });
+    }
+
+    @Test
+    void createAllSavesNothingWhenOneItemIsInvalid() {
+        when(categories.getByIds(any())).thenReturn(java.util.Map.of(
+                "food", new Category("food", "Alimente", TransactionType.EXPENSE, null, null)));
+
+        BulkTransactionRequest request = new BulkTransactionRequest(java.util.List.of(
+                new TransactionRequest(TransactionType.EXPENSE, BigDecimal.TEN, "ok", LocalDate.of(2026, 10, 3), "food"),
+                new TransactionRequest(TransactionType.INCOME, BigDecimal.TEN, "greșit", LocalDate.of(2026, 10, 3), "food")));
+
+        assertThatThrownBy(() -> service.createAll(request))
+                .isInstanceOfSatisfying(ApiException.class, ex -> {
+                    assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(ex.getMessage()).startsWith("Rândul 2");
+                });
+        verify(repository, never()).saveAll(any());
+    }
+
+    @Test
+    void createAllRejectsUnknownCategory() {
+        when(categories.getByIds(any())).thenReturn(java.util.Map.of());
+
+        BulkTransactionRequest request = new BulkTransactionRequest(java.util.List.of(
+                new TransactionRequest(TransactionType.EXPENSE, BigDecimal.TEN, "x", LocalDate.of(2026, 10, 3), "nope")));
+
+        assertThatThrownBy(() -> service.createAll(request))
+                .isInstanceOfSatisfying(ApiException.class,
+                        ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+        verify(repository, never()).saveAll(any());
+    }
 }

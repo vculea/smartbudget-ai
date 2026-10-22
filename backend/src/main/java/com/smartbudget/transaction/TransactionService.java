@@ -86,6 +86,33 @@ public class TransactionService {
         return toResponse(repository.save(tx), category);
     }
 
+    /** Importă mai multe tranzacții: dacă una singură e invalidă, nu se salvează nimic. */
+    public BulkTransactionResponse createAll(BulkTransactionRequest request) {
+        List<TransactionRequest> items = request.transactions();
+        Map<String, Category> categories = categoryService.getByIds(
+                items.stream().map(TransactionRequest::categoryId).distinct().toList());
+        Instant now = clock.instant();
+        List<Transaction> toSave = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            TransactionRequest item = items.get(i);
+            Category category = categories.get(item.categoryId());
+            if (category == null) {
+                throw ApiException.unprocessable("Rândul " + (i + 1) + ": categoria nu există.");
+            }
+            if (category.getType() != item.type()) {
+                throw ApiException.unprocessable("Rândul " + (i + 1) + ": tipul tranzacției (" + item.type()
+                        + ") nu corespunde tipului categoriei (" + category.getType() + ").");
+            }
+            Transaction tx = new Transaction();
+            tx.setUserId(currentUser.id());
+            tx.setCreatedAt(now);
+            apply(tx, item, now);
+            toSave.add(tx);
+        }
+        repository.saveAll(toSave);
+        return new BulkTransactionResponse(toSave.size());
+    }
+
     public TransactionResponse update(String id, TransactionRequest request) {
         Transaction tx = find(id);
         Category category = validatedCategory(request);

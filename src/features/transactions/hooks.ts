@@ -49,6 +49,26 @@ export function useSaveTransaction() {
   });
 }
 
+/** Salvează tranzacțiile verificate în previzualizarea importului. */
+export function useImportTransactions() {
+  const invalidate = useInvalidateFinanceData();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (inputs: TransactionInput[]) =>
+      transactionsApi.createMany(inputs),
+    onSuccess: async ({ created }) => {
+      await invalidate();
+      toast.success(
+        created === 1
+          ? "S-a importat o tranzacție."
+          : `S-au importat ${created} tranzacții.`,
+      );
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Importul nu a putut fi salvat.")),
+  });
+}
+
 /** Citește poza unui bon cu AI; nu salvează nimic, doar propune valorile formularului. */
 export function useScanTransaction() {
   return useMutation({

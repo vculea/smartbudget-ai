@@ -1,4 +1,4 @@
-import type { AiInsightsApi, TransactionsApi } from "../contracts";
+import type { AiInsightsApi, TransactionImportAiApi, TransactionsApi } from "../contracts";
 import { ApiError } from "../errors";
 import { http } from "../http";
 import {
@@ -8,7 +8,11 @@ import {
   type BrowserAiConfig,
 } from "../../config/aiSettings";
 import { toAiInsightsResponse, type AiInsightsWire } from "./aiInsightsApi";
-import type { TransactionScan } from "../../types";
+import type {
+  ImportCategorySuggestion,
+  ImportColumnMapping,
+  TransactionScan,
+} from "../../types";
 
 /** Prompturile construite de backend; modelul primește doar rezumatul agregat. */
 interface LocalInsightsPrompt {
@@ -187,6 +191,49 @@ export const localAiInsightsApi: AiInsightsApi = {
       { ...validated, content },
     );
     return toAiInsightsResponse(data);
+  },
+};
+
+interface ImportPrompt {
+  systemPrompt: string;
+  userMessage: string;
+}
+
+// Backendul construiește prompturile și validează răspunsul; doar apelul către model pornește din browser.
+export const localImportAiApi: TransactionImportAiApi = {
+  async detectColumns(rows) {
+    const settings = activeConfig();
+    const { data: prompt } = await http.post<ImportPrompt>(
+      "/transactions/import/columns/prompt",
+      { rows },
+    );
+    const content = await chat(settings, settings.model, [
+      { role: "system", content: prompt.systemPrompt },
+      { role: "user", content: prompt.userMessage },
+    ]);
+    const { data } = await http.post<ImportColumnMapping>(
+      "/transactions/import/columns/result",
+      {
+        content,
+        columnCount: Math.max(1, ...rows.map((row) => row.length)),
+      },
+    );
+    return data;
+  },
+  async suggestCategories(items) {
+    const settings = activeConfig();
+    const { data: prompt } = await http.post<ImportPrompt>(
+      "/transactions/import/categories/prompt",
+      { items },
+    );
+    const content = await chat(settings, settings.model, [
+      { role: "system", content: prompt.systemPrompt },
+      { role: "user", content: prompt.userMessage },
+    ]);
+    const { data } = await http.post<{
+      suggestions: ImportCategorySuggestion[];
+    }>("/transactions/import/categories/result", { content, items });
+    return data.suggestions;
   },
 };
 
