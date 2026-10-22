@@ -20,7 +20,16 @@ import {
   alpha,
 } from "@mui/material";
 import { ArrowLeft, FileSpreadsheet, Sparkles, Upload } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../../components/common/PageHeader";
 import type { Category, TransactionType } from "../../../types";
@@ -43,6 +52,48 @@ import {
 } from "./importWorkflow";
 
 const RETRY_BATCH = 10;
+const MIN_GRID_HEIGHT = 120;
+
+// Înălțimea gridului astfel încât pagina să încapă în fereastră și să deruleze
+// doar gridul, nu și pagina.
+function useFitGridHeight(
+  active: boolean,
+  gridRef: RefObject<HTMLElement | null>,
+  footerRef: RefObject<HTMLElement | null>,
+) {
+  const [height, setHeight] = useState(480);
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!active || !grid) return;
+    const main = grid.closest("main");
+
+    const fit = () => {
+      const top = grid.getBoundingClientRect().top + window.scrollY;
+      const footer = footerRef.current?.offsetHeight ?? 0;
+      const bottomPadding = main
+        ? parseFloat(getComputedStyle(main).paddingBottom) || 0
+        : 0;
+      setHeight(
+        Math.max(
+          MIN_GRID_HEIGHT,
+          Math.floor(window.innerHeight - top - footer - bottomPadding),
+        ),
+      );
+    };
+
+    fit();
+    window.addEventListener("resize", fit);
+    const observer = new ResizeObserver(fit);
+    if (main) observer.observe(main);
+    return () => {
+      window.removeEventListener("resize", fit);
+      observer.disconnect();
+    };
+  }, [active, gridRef, footerRef]);
+
+  return height;
+}
 
 interface PreviewRow {
   draft: ImportDraft;
@@ -54,6 +105,8 @@ export function TransactionsImportPage() {
   const { categories, byId, isLoading: categoriesLoading } = useCategories();
   const importMutation = useImportTransactions();
   const fileInput = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<PreviewRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +129,7 @@ export function TransactionsImportPage() {
   );
 
   const reading = phase === "reading";
+  const gridHeight = useFitGridHeight(rows !== null, gridRef, footerRef);
 
   const applySuggestions = useCallback(
     (updates: Map<string, CategoryUpdate>) =>
@@ -348,7 +402,7 @@ export function TransactionsImportPage() {
             </Alert>
           )}
 
-          <TableContainer sx={{ maxHeight: "60vh" }}>
+          <TableContainer ref={gridRef} sx={{ maxHeight: gridHeight }}>
             <Table
               stickyHeader
               size="small"
@@ -399,6 +453,7 @@ export function TransactionsImportPage() {
           </TableContainer>
 
           <Stack
+            ref={footerRef}
             direction="row"
             spacing={1.5}
             justifyContent="flex-end"
