@@ -1,6 +1,8 @@
 import { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
+import { RequireAuth } from "../auth/RequireAuth";
+import { LoginPage } from "../features/auth/LoginPage";
 import { NotFoundPage } from "../features/not-found/NotFoundPage";
 
 const DashboardPage = lazy(() =>
@@ -35,15 +37,18 @@ const AiSettingsPage = lazy(() =>
 export function AppRoutes() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/budgets" element={<BudgetsPage />} />
-        <Route path="/goals" element={<GoalsPage />} />
-        <Route path="/ai-insights" element={<AiInsightsPage />} />
-        <Route path="/settings/ai" element={<AiSettingsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/budgets" element={<BudgetsPage />} />
+          <Route path="/goals" element={<GoalsPage />} />
+          <Route path="/ai-insights" element={<AiInsightsPage />} />
+          <Route path="/settings/ai" element={<AiSettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Route>
     </Routes>
   );

@@ -1,4 +1,5 @@
 export type * from "./ai";
+export type * from "./auth";
 export type * from "./budget";
 export type * from "./category";
 export type * from "./common";

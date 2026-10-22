@@ -1,5 +1,6 @@
 package com.smartbudget.transaction;
 
+import com.smartbudget.auth.CurrentUser;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -32,13 +33,15 @@ public class TransactionService {
     private final CategoryService categoryService;
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
+    private final CurrentUser currentUser;
 
     public TransactionService(TransactionRepository repository, CategoryService categoryService,
-                              MongoTemplate mongoTemplate, Clock clock) {
+                              MongoTemplate mongoTemplate, Clock clock, CurrentUser currentUser) {
         this.repository = repository;
         this.categoryService = categoryService;
         this.mongoTemplate = mongoTemplate;
         this.clock = clock;
+        this.currentUser = currentUser;
     }
 
     public Page<TransactionResponse> list(TransactionFilter filter, Pageable pageable) {
@@ -59,7 +62,7 @@ public class TransactionService {
     }
 
     public List<TransactionResponse> recent(LocalDate from, LocalDate to, int limit) {
-        Query query = new Query(Criteria.where("transactionDate").gte(from).lte(to))
+        Query query = new Query(Criteria.where("userId").is(currentUser.id()).and("transactionDate").gte(from).lte(to))
                 .with(Sort.by(Sort.Order.desc("transactionDate"), Sort.Order.desc("createdAt")))
                 .limit(limit);
         List<Transaction> content = mongoTemplate.find(query, Transaction.class);
@@ -76,6 +79,7 @@ public class TransactionService {
     public TransactionResponse create(TransactionRequest request) {
         Category category = validatedCategory(request);
         Transaction tx = new Transaction();
+        tx.setUserId(currentUser.id());
         Instant now = clock.instant();
         tx.setCreatedAt(now);
         apply(tx, request, now);
@@ -90,14 +94,14 @@ public class TransactionService {
     }
 
     public void delete(String id) {
-        if (!repository.existsById(id)) {
+        if (repository.deleteByIdAndUserId(id, currentUser.id()) == 0) {
             throw ApiException.notFound("Tranzacția nu există.");
         }
-        repository.deleteById(id);
     }
 
     private Transaction find(String id) {
-        return repository.findById(id).orElseThrow(() -> ApiException.notFound("Tranzacția nu există."));
+        return repository.findByIdAndUserId(id, currentUser.id())
+                .orElseThrow(() -> ApiException.notFound("Tranzacția nu există."));
     }
 
     private Category validatedCategory(TransactionRequest request) {
@@ -124,6 +128,7 @@ public class TransactionService {
 
     private Criteria buildCriteria(TransactionFilter filter) {
         List<Criteria> parts = new ArrayList<>();
+        parts.add(Criteria.where("userId").is(currentUser.id()));
         if (filter.type() != null) {
             parts.add(Criteria.where("type").is(filter.type()));
         }
@@ -143,7 +148,7 @@ public class TransactionService {
             }
             parts.add(Criteria.where("description").regex(Pattern.compile(Pattern.quote(term), Pattern.CASE_INSENSITIVE)));
         }
-        return parts.isEmpty() ? new Criteria() : new Criteria().andOperator(parts.toArray(Criteria[]::new));
+        return new Criteria().andOperator(parts.toArray(Criteria[]::new));
     }
 
     private Sort sanitizeSort(Sort requested) {

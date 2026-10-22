@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
+import com.smartbudget.TestUser;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -31,7 +32,7 @@ class TransactionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TransactionService(repository, categories, mongoTemplate, TestClock.FIXED);
+        service = new TransactionService(repository, categories, mongoTemplate, TestClock.FIXED, TestUser.current());
         when(repository.save(any(Transaction.class))).thenAnswer(inv -> {
             Transaction tx = inv.getArgument(0);
             if (tx.getId() == null) {
@@ -86,7 +87,7 @@ class TransactionServiceTest {
         existing.setCategoryId("food");
         existing.setTransactionDate(LocalDate.of(2026, 9, 1));
         existing.setCreatedAt(java.time.Instant.parse("2026-09-01T00:00:00Z"));
-        when(repository.findById("t1")).thenReturn(Optional.of(existing));
+        when(repository.findByIdAndUserId("t1", TestUser.ID)).thenReturn(Optional.of(existing));
         when(categories.getById("food")).thenReturn(new Category("food", "Alimente", TransactionType.EXPENSE, null, null));
 
         TransactionResponse response = service.update("t1", new TransactionRequest(TransactionType.EXPENSE,
@@ -101,7 +102,7 @@ class TransactionServiceTest {
 
     @Test
     void updateOfMissingTransactionIsNotFound() {
-        when(repository.findById("missing")).thenReturn(Optional.empty());
+        when(repository.findByIdAndUserId("missing", TestUser.ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update("missing", new TransactionRequest(TransactionType.EXPENSE,
                 BigDecimal.TEN, "x", LocalDate.of(2026, 10, 3), "food")))
@@ -110,20 +111,30 @@ class TransactionServiceTest {
 
     @Test
     void deletesExistingTransaction() {
-        when(repository.existsById("t1")).thenReturn(true);
+        when(repository.deleteByIdAndUserId("t1", TestUser.ID)).thenReturn(1L);
 
         service.delete("t1");
 
-        verify(repository).deleteById("t1");
+        verify(repository).deleteByIdAndUserId("t1", TestUser.ID);
     }
 
     @Test
-    void deleteOfMissingTransactionIsNotFound() {
-        when(repository.existsById("missing")).thenReturn(false);
+    void deleteOfMissingOrForeignTransactionIsNotFound() {
+        when(repository.deleteByIdAndUserId("missing", TestUser.ID)).thenReturn(0L);
 
         assertThatThrownBy(() -> service.delete("missing"))
                 .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
-        verify(repository, never()).deleteById(any());
+    }
+
+    @Test
+    void createStoresTransactionForCurrentUser() {
+        when(categories.getById("food")).thenReturn(new Category("food", "Alimente", TransactionType.EXPENSE, null, null));
+
+        service.create(new TransactionRequest(TransactionType.EXPENSE, BigDecimal.TEN, "x",
+                LocalDate.of(2026, 10, 3), "food"));
+
+        verify(repository).save(org.mockito.ArgumentMatchers.argThat((Transaction tx) ->
+                TestUser.ID.equals(tx.getUserId())));
     }
 
     @Test

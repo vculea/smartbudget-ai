@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
+import com.smartbudget.TestUser;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -36,7 +37,7 @@ class BudgetServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new BudgetService(repository, categories, stats, TestClock.FIXED);
+        service = new BudgetService(repository, categories, stats, TestClock.FIXED, TestUser.current());
         when(repository.save(any(Budget.class))).thenAnswer(inv -> {
             Budget b = inv.getArgument(0);
             b.setId("b1");
@@ -62,7 +63,7 @@ class BudgetServiceTest {
     @Test
     void createsBudgetForExpenseCategory() {
         when(categories.getById("c1")).thenReturn(expenseCategory());
-        when(repository.existsByCategoryIdAndMonth("c1", "2026-10")).thenReturn(false);
+        when(repository.existsByUserIdAndCategoryIdAndMonth(TestUser.ID, "c1", "2026-10")).thenReturn(false);
 
         BudgetResponse response = service.create(new BudgetRequest("c1", MONTH, new BigDecimal("500")));
 
@@ -75,7 +76,7 @@ class BudgetServiceTest {
     @Test
     void rejectsDuplicateBudgetForSameCategoryAndMonth() {
         when(categories.getById("c1")).thenReturn(expenseCategory());
-        when(repository.existsByCategoryIdAndMonth("c1", "2026-10")).thenReturn(true);
+        when(repository.existsByUserIdAndCategoryIdAndMonth(TestUser.ID, "c1", "2026-10")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(new BudgetRequest("c1", MONTH, new BigDecimal("500"))))
                 .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT));
@@ -85,7 +86,7 @@ class BudgetServiceTest {
     @Test
     void mapsUniqueIndexViolationToConflict() {
         when(categories.getById("c1")).thenReturn(expenseCategory());
-        when(repository.existsByCategoryIdAndMonth("c1", "2026-10")).thenReturn(false);
+        when(repository.existsByUserIdAndCategoryIdAndMonth(TestUser.ID, "c1", "2026-10")).thenReturn(false);
         when(repository.save(any(Budget.class))).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
 
         assertThatThrownBy(() -> service.create(new BudgetRequest("c1", MONTH, new BigDecimal("500"))))
@@ -114,7 +115,7 @@ class BudgetServiceTest {
         Budget warning = budget("b-warn", "c1", "1000");
         Budget exceeded = budget("b-exc", "c2", "200");
         Budget normal = budget("b-ok", "c3", "400");
-        when(repository.findByMonth("2026-10")).thenReturn(List.of(warning, exceeded, normal));
+        when(repository.findByUserIdAndMonth(TestUser.ID, "2026-10")).thenReturn(List.of(warning, exceeded, normal));
         when(categories.getByIds(any())).thenReturn(Map.of(
                 "c1", new Category("c1", "Alimente", TransactionType.EXPENSE, null, null),
                 "c2", new Category("c2", "Divertisment", TransactionType.EXPENSE, null, null),
@@ -141,7 +142,7 @@ class BudgetServiceTest {
         Budget oct = budget("b1", "c1", "1000");
         Budget nov = budget("b2", "c1", "500");
         nov.setMonth("2026-11");
-        when(repository.findByMonthStartingWith("2026-")).thenReturn(List.of(oct, nov));
+        when(repository.findByUserIdAndMonthStartingWith(TestUser.ID, "2026-")).thenReturn(List.of(oct, nov));
         when(categories.getByIds(any())).thenReturn(Map.of("c1", expenseCategory()));
         when(stats.expensesByCategory(any(), any())).thenReturn(Map.of("c1", new BigDecimal("1800")));
 

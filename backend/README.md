@@ -92,12 +92,17 @@ unavailable). No test calls a real AI provider: the AI interface is mocked, and 
 | `AI_BASE_URL` | `https://api.openai.com/v1` | any OpenAI-compatible base URL |
 | `AI_CONNECT_TIMEOUT` / `AI_READ_TIMEOUT` | `5s` / `30s` | provider timeouts |
 | `AI_JSON_MODE` | `true` | send `response_format: json_object` (set `false` if the provider rejects it) |
-| `SEED_ENABLED` | `true` in `dev`, `false` otherwise | demo data seeding |
+| `SEED_ENABLED` | `true` in `dev`, `false` otherwise | demo data seeding (categories; user data only with `SEED_USER_ID`) |
+| `SEED_USER_ID` | – | internal id of the user who receives the demo transactions/budgets/goals |
+| `GOOGLE_CLIENT_ID` | – (required for sign-in) | OAuth client id of the Google sign-in; without it `POST /auth/google` answers 503 |
+| `JWT_SECRET` | – (random per start, with a warning) | signs the session tokens; at least 32 characters |
+| `AUTH_TOKEN_TTL` | `12h` | session lifetime |
+| `ALLOWED_EMAILS` | – (any verified Google account) | comma separated Google accounts allowed to sign in |
 | `SWAGGER_ENABLED` | `true` in dev, `false` in prod | Swagger UI / OpenAPI docs in prod |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | comma separated origins |
 
-Indexes are created at startup (`auto-index-creation: true`): `transactionDate`, `categoryId`, `type` on `transactions`;
-unique `{month, categoryId}` on `budgets`; `{goalId, contributionDate}` on `goal_contributions`; unique `{name, type}` on `categories`.
+Indexes are created at startup (`auto-index-creation: true`): `{userId, transactionDate}`, `categoryId`, `type` on `transactions`;
+unique `{userId, month, categoryId}` on `budgets`; `userId` on `savings_goals`; unique `googleSub` on `users`; `{goalId, contributionDate}` on `goal_contributions`; unique `{name, type}` on `categories`.
 
 ## Data formats
 
@@ -111,10 +116,12 @@ unique `{month, categoryId}` on `budgets`; `{goalId, contributionDate}` on `goal
 
 ## Endpoints (`/api/v1`)
 
-Interactive documentation: Swagger UI. Summary:
+Interactive documentation: Swagger UI (use *Authorize* with the token returned by `/auth/google`). All endpoints below except `/auth/google` and `/actuator/health` require `Authorization: Bearer <token>`. Summary:
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| POST | `/auth/google` | public; body `{ "credential": "<Google ID token>" }` → `{ token, expiresAt, user }`; 401 / 403 / 503 |
+| GET | `/auth/me` | the signed-in user |
 | GET | `/dashboard?month=YYYY-MM` | month defaults to the current one |
 | GET | `/transactions` | filters `type`, `categoryId`, `startDate`, `endDate` (inclusive), `search`; `page`, `size` (≤ 100), `sort=transactionDate\|amount\|createdAt,asc\|desc` |
 | GET | `/transactions/{id}` | 404 if missing |
@@ -199,10 +206,31 @@ credentials, `503` provider unavailable / `AI_API_KEY` missing, `504` provider t
   `priority` ∈ LOW/MEDIUM/HIGH, `0 ≤ suggestedMonthlySaving ≤ totalExpenses`.
 * The model only produces text; it has no tool or database access.
 
+## Authentication
+
+Sign-in is done **only with a Google account** (Google Identity Services, ID-token flow):
+
+1. The frontend shows the "Sign in with Google" button and receives a Google ID token (a signed JWT).
+2. `POST /api/v1/auth/google` `{ "credential": "<ID token>" }`: the backend verifies the signature against Google's public keys
+   (`https://www.googleapis.com/oauth2/v3/certs`), the issuer, the audience (`GOOGLE_CLIENT_ID`), the expiry and `email_verified`,
+   creates the user on first login (collection `users`, keyed by the Google `sub`) and returns `{ token, expiresAt, user }`.
+3. Every other endpoint needs `Authorization: Bearer <token>` (HS256 JWT signed with `JWT_SECRET`, subject = internal user id,
+   lifetime `AUTH_TOKEN_TTL`, default 12 h). Missing/invalid/expired token: `401` with the usual error body.
+4. `GET /auth/me` returns the signed-in user. Public: `POST /auth/google`, `/actuator/health`, `/actuator/info` and the API docs.
+
+Transactions, budgets and goals (and the contributions of a goal) are scoped to the user: lists and aggregations only see the caller's
+documents, and reading/changing/deleting another user's id answers `404`. Categories are shared. Data created before accounts existed
+has no owner and is not visible to anyone (it stays in MongoDB; the old global unique budget index is dropped at startup).
+
+Google setup: <https://console.cloud.google.com/apis/credentials> → *Create credentials* → *OAuth client ID* → *Web application*;
+add the URLs the app is opened from under *Authorized JavaScript origins* (e.g. `http://localhost:8081`, `http://localhost:5173`).
+No redirect URI is needed. The first time, the *OAuth consent screen* must be configured; in *Testing* mode add your Google account as a test user.
+
 ## Demo data
 
-`DemoDataSeeder` (dev profile or `SEED_ENABLED=true`) creates 11 categories, ~57 transactions over the current and previous two months,
-budgets for 6 categories per month, and 4 goals (one completed) with contributions. Every document has a deterministic id and is inserted
+`DemoDataSeeder` (dev profile or `SEED_ENABLED=true`) always inserts the 11 default categories when missing. With `SEED_USER_ID` set (the
+internal id of a user, visible in `GET /auth/me`) it also creates ~57 transactions over the current and previous two months,
+budgets for 6 categories per month, and 4 goals (one completed) with contributions, all owned by that user. Every document has a deterministic id and is inserted
 only when missing, so restarts do not duplicate data. For the current month it yields budgets in all states: `NORMAL`
 (groceries, utilities, restaurants), `WARNING` (transport 82.5 %, rent exactly 100 %) and `EXCEEDED` (entertainment 128 %), plus spending in
 categories without a budget.
@@ -223,7 +251,7 @@ the frontend types and additionally expose `topCategories` and `budgetUsedPercen
 
 ## Not implemented / known limitations
 
-* No authentication or multi-user support (out of MVP scope): all data belongs to a single anonymous user. Do not expose the API publicly as is.
+* Authentication: sign-in with Google only (see "Authentication"). Transactions, budgets and goals belong to the signed-in user; categories are shared reference data.
 * No category CRUD, budget update/delete, goal update/delete or contribution listing endpoints (not required by the MVP).
 * Real AI provider calls were not exercised in automated tests (by design); verify manually with a key in `AI_API_KEY`.
 * No per-client rate limiting of `/ai/insights` (each call is billable at the provider).

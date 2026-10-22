@@ -6,13 +6,14 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-/** At most one budget per category and month (enforced by the unique compound index). */
+/** At most one budget per user, category and month (enforced by the unique compound index). */
 @Document(collection = "budgets")
-@CompoundIndex(name = "uk_budget_month_category", def = "{'month': 1, 'categoryId': 1}", unique = true)
+@CompoundIndex(name = "uk_budget_user_month_category", def = "{'userId': 1, 'month': 1, 'categoryId': 1}", unique = true)
 public class Budget {
 
     @Id
     private String id;
+    private String userId;
     private String categoryId;
     /** Format YYYY-MM. */
     private String month;
@@ -26,6 +27,14 @@ public class Budget {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getCategoryId() {

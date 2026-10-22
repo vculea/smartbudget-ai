@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import { SESSION_EXPIRED_EVENT, clearSession, getToken } from "../auth/authStorage";
 import { env } from "../config/env";
 import type { ApiErrorBody } from "../types";
 import { ApiError } from "./errors";
@@ -9,12 +10,25 @@ export const http = axios.create({
   headers: { "Content-Type": "application/json", Accept: "application/json" },
 });
 
+http.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers.set("Authorization", `Bearer ${token}`);
+  }
+  return config;
+});
+
 http.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     if (error instanceof AxiosError) {
       if (error.response) {
         const status = error.response.status;
+        // 401 în afara autentificării = sesiune expirată sau invalidă; la login eroarea rămâne a formularului
+        if (status === 401 && !error.config?.url?.endsWith("/auth/google")) {
+          clearSession();
+          window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+        }
         const body = error.response.data as ApiErrorBody | undefined;
         const gateway = status === 502 || status === 503 || status === 504;
         return Promise.reject(

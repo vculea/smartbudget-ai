@@ -3,12 +3,14 @@ package com.smartbudget.goal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
+import com.smartbudget.TestUser;
 import com.smartbudget.common.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,7 +29,7 @@ class GoalServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new GoalService(goals, contributions, TestClock.FIXED);
+        service = new GoalService(goals, contributions, TestClock.FIXED, TestUser.current());
         when(goals.save(any(SavingsGoal.class))).thenAnswer(inv -> {
             SavingsGoal g = inv.getArgument(0);
             if (g.getId() == null) {
@@ -63,7 +65,7 @@ class GoalServiceTest {
 
     @Test
     void contributionBelowTargetKeepsGoalActiveAndUpdatesProgress() {
-        when(goals.findById("g1")).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
+        when(goals.findByIdAndUserId("g1", TestUser.ID)).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
         when(contributions.sumByGoalIds(List.of("g1"))).thenReturn(Map.of("g1", new BigDecimal("250")));
 
         GoalResponse response = service.contribute("g1", new ContributionRequest(new BigDecimal("250"), null, "  prima  "));
@@ -78,7 +80,7 @@ class GoalServiceTest {
 
     @Test
     void contributionReachingTargetCompletesGoal() {
-        when(goals.findById("g1")).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
+        when(goals.findByIdAndUserId("g1", TestUser.ID)).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
         when(contributions.sumByGoalIds(List.of("g1"))).thenReturn(Map.of("g1", new BigDecimal("1000")));
 
         GoalResponse response = service.contribute("g1", new ContributionRequest(new BigDecimal("400"), null, null));
@@ -89,7 +91,7 @@ class GoalServiceTest {
 
     @Test
     void overshootingTheTargetCompletesGoalAndCapsProgressAt100() {
-        when(goals.findById("g1")).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
+        when(goals.findByIdAndUserId("g1", TestUser.ID)).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
         when(contributions.sumByGoalIds(List.of("g1"))).thenReturn(Map.of("g1", new BigDecimal("1200")));
 
         GoalResponse response = service.contribute("g1", new ContributionRequest(new BigDecimal("700"), null, null));
@@ -101,7 +103,7 @@ class GoalServiceTest {
 
     @Test
     void completedGoalRejectsContributions() {
-        when(goals.findById("g1")).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.COMPLETED)));
+        when(goals.findByIdAndUserId("g1", TestUser.ID)).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.COMPLETED)));
 
         assertThatThrownBy(() -> service.contribute("g1", new ContributionRequest(BigDecimal.TEN, null, null)))
                 .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT));
@@ -110,7 +112,7 @@ class GoalServiceTest {
 
     @Test
     void contributionToMissingGoalIsNotFound() {
-        when(goals.findById("zzz")).thenReturn(Optional.empty());
+        when(goals.findByIdAndUserId("zzz", TestUser.ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.contribute("zzz", new ContributionRequest(BigDecimal.TEN, null, null)))
                 .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
@@ -118,7 +120,7 @@ class GoalServiceTest {
 
     @Test
     void rejectsContributionDatedInTheFuture() {
-        when(goals.findById("g1")).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
+        when(goals.findByIdAndUserId("g1", TestUser.ID)).thenReturn(Optional.of(goal("g1", "1000", GoalStatus.ACTIVE)));
 
         assertThatThrownBy(() -> service.contribute("g1",
                 new ContributionRequest(BigDecimal.TEN, LocalDate.of(2026, 10, 23), null)))
@@ -128,7 +130,7 @@ class GoalServiceTest {
 
     @Test
     void listDerivesCurrentAmountFromContributions() {
-        when(goals.findAll(any(org.springframework.data.domain.Sort.class))).thenReturn(List.of(
+        when(goals.findByUserId(eq(TestUser.ID), any(org.springframework.data.domain.Sort.class))).thenReturn(List.of(
                 goal("g1", "1000", GoalStatus.ACTIVE), goal("g2", "500", GoalStatus.ACTIVE)));
         when(contributions.sumByGoalIds(List.of("g1", "g2"))).thenReturn(Map.of("g1", new BigDecimal("333.33")));
 

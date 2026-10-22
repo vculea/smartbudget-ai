@@ -4,14 +4,17 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "transactions")
+@CompoundIndex(name = "idx_transaction_user_date", def = "{'userId': 1, 'transactionDate': -1}")
 public class Transaction {
 
     @Id
     private String id;
+    private String userId;
     @Indexed
     private TransactionType type;
     private BigDecimal amount;
@@ -29,6 +32,14 @@ public class Transaction {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public TransactionType getType() {

@@ -22,13 +22,15 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Populates demo data for the last 3 months. Every document has a deterministic id and is only
+ * Populates the reference categories and, when smartbudget.seed.user-id is set, demo data (last 3 months) owned by
+ * that user (the internal user id, see the users collection). Every document has a deterministic id and is only
  * inserted when missing, so restarting the application never duplicates or overwrites data.
  * Enabled with smartbudget.seed.enabled=true (default only in the dev profile).
  */
@@ -92,16 +94,19 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final SavingsGoalRepository goals;
     private final GoalContributionRepository contributions;
     private final Clock clock;
+    private final String userId;
 
     public DemoDataSeeder(CategoryRepository categories, TransactionRepository transactions,
                           BudgetRepository budgets, SavingsGoalRepository goals,
-                          GoalContributionRepository contributions, Clock clock) {
+                          GoalContributionRepository contributions, Clock clock,
+                          @Value("${smartbudget.seed.user-id:}") String userId) {
         this.categories = categories;
         this.transactions = transactions;
         this.budgets = budgets;
         this.goals = goals;
         this.contributions = contributions;
         this.clock = clock;
+        this.userId = userId.strip();
     }
 
     @Override
@@ -109,6 +114,11 @@ public class DemoDataSeeder implements ApplicationRunner {
         LocalDate today = LocalDate.now(clock);
         int created = 0;
         created += seedCategories();
+        if (userId.isEmpty()) {
+            log.info("Demo data seeding: {} new categories (set SEED_USER_ID to also seed demo data for a user)",
+                    created);
+            return;
+        }
         for (int offset = 2; offset >= 0; offset--) {
             YearMonth month = YearMonth.from(today).minusMonths(offset);
             created += seedTransactions(month, today, offset);
@@ -178,6 +188,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         Instant stamp = date.atStartOfDay().toInstant(ZoneOffset.UTC).plusSeconds(index);
         Transaction tx = new Transaction();
         tx.setId(id);
+        tx.setUserId(userId);
         tx.setType(type);
         tx.setAmount(amount);
         tx.setDescription(description);
@@ -198,6 +209,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             }
             Budget budget = new Budget();
             budget.setId(id);
+            budget.setUserId(userId);
             budget.setCategoryId(entry[0]);
             budget.setMonth(month.toString());
             budget.setLimitAmount(new BigDecimal(entry[1]));
@@ -233,6 +245,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         if (!goals.existsById(id)) {
             SavingsGoal goal = new SavingsGoal();
             goal.setId(id);
+            goal.setUserId(userId);
             goal.setName(name);
             goal.setDescription(description);
             goal.setTargetAmount(new BigDecimal(target));

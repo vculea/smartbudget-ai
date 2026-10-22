@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 /** The accumulated amount is intentionally not stored: it is always derived from the contributions. */
@@ -12,6 +13,8 @@ public class SavingsGoal {
 
     @Id
     private String id;
+    @Indexed
+    private String userId;
     private String name;
     private String description;
     private BigDecimal targetAmount;
@@ -26,6 +29,14 @@ public class SavingsGoal {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getName() {

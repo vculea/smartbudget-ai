@@ -1,5 +1,6 @@
 package com.smartbudget.goal;
 
+import com.smartbudget.auth.CurrentUser;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.common.Money;
 import java.math.BigDecimal;
@@ -19,16 +20,19 @@ public class GoalService {
     private final SavingsGoalRepository goalRepository;
     private final GoalContributionRepository contributionRepository;
     private final Clock clock;
+    private final CurrentUser currentUser;
 
     public GoalService(SavingsGoalRepository goalRepository, GoalContributionRepository contributionRepository,
-                       Clock clock) {
+                       Clock clock, CurrentUser currentUser) {
         this.goalRepository = goalRepository;
         this.contributionRepository = contributionRepository;
         this.clock = clock;
+        this.currentUser = currentUser;
     }
 
     public List<GoalResponse> list() {
-        List<SavingsGoal> goals = goalRepository.findAll(Sort.by("status", "targetDate", "createdAt"));
+        List<SavingsGoal> goals = goalRepository.findByUserId(currentUser.id(),
+                Sort.by("status", "targetDate", "createdAt"));
         Map<String, BigDecimal> sums = contributionRepository.sumByGoalIds(goals.stream().map(SavingsGoal::getId).toList());
         return goals.stream()
                 .map(goal -> toResponse(goal, sums.getOrDefault(goal.getId(), BigDecimal.ZERO)))
@@ -42,6 +46,7 @@ public class GoalService {
         }
         SavingsGoal goal = new SavingsGoal();
         Instant now = clock.instant();
+        goal.setUserId(currentUser.id());
         goal.setName(request.name().trim());
         goal.setDescription(request.description() == null || request.description().isBlank()
                 ? null : request.description().trim());
@@ -55,7 +60,7 @@ public class GoalService {
 
     /** Completed goals do not accept contributions: their target has been reached and the goal is closed. */
     public GoalResponse contribute(String goalId, ContributionRequest request) {
-        SavingsGoal goal = goalRepository.findById(goalId)
+        SavingsGoal goal = goalRepository.findByIdAndUserId(goalId, currentUser.id())
                 .orElseThrow(() -> ApiException.notFound("Obiectivul nu există."));
         if (goal.getStatus() == GoalStatus.COMPLETED) {
             throw ApiException.conflict("Obiectivul este deja finalizat și nu mai acceptă contribuții.");

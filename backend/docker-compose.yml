@@ -34,7 +34,12 @@ services:
       AI_JSON_MODE: ${AI_JSON_MODE:-true}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       SEED_ENABLED: ${SEED_ENABLED:-false}
+      SEED_USER_ID: ${SEED_USER_ID:-}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL:-12h}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     # Permite apelarea unui Ollama rulat pe gazdă (http://host.docker.internal:11434/v1) și pe Linux
@@ -47,6 +52,9 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        # ID-ul clientului Google este public (ajunge în bundle), la fel ca pe backend
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     restart: unless-stopped
     depends_on:
       backend:

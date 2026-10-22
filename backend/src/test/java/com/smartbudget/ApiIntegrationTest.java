@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -47,9 +49,11 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -57,6 +61,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 /** End-to-end API tests on a real, isolated MongoDB (Testcontainers). Skipped when Docker is unavailable. */
 @SpringBootTest
 @AutoConfigureMockMvc
+@WithMockUser(username = TestUser.ID)
 @Testcontainers(disabledWithoutDocker = true)
 class ApiIntegrationTest {
 
@@ -243,6 +248,7 @@ class ApiIntegrationTest {
 
         // the unique compound index is enforced by MongoDB itself, not only by the service check
         Budget duplicate = new Budget();
+        duplicate.setUserId(TestUser.ID);
         duplicate.setCategoryId("food");
         duplicate.setMonth("2026-09");
         duplicate.setLimitAmount(BigDecimal.ONE);
@@ -269,7 +275,7 @@ class ApiIntegrationTest {
     void budgetIndexesExist() {
         assertThat(mongoTemplate.indexOps("budgets").getIndexInfo())
                 .anyMatch(index -> index.isUnique() && index.getIndexFields().stream()
-                        .map(f -> f.getKey()).toList().equals(List.of("month", "categoryId")));
+                        .map(f -> f.getKey()).toList().equals(List.of("userId", "month", "categoryId")));
         assertThat(mongoTemplate.indexOps("transactions").getIndexInfo())
                 .flatExtracting(index -> index.getIndexFields().stream().map(f -> f.getKey()).toList())
                 .contains("transactionDate", "categoryId", "type");
@@ -369,7 +375,8 @@ class ApiIntegrationTest {
     @Test
     void demoSeederIsIdempotentAndProducesAllBudgetStatuses() throws Exception {
         categories.deleteAll();
-        DemoDataSeeder seeder = new DemoDataSeeder(categories, transactions, budgets, goals, contributions, TestClock.FIXED);
+        DemoDataSeeder seeder = new DemoDataSeeder(categories, transactions, budgets, goals, contributions,
+                TestClock.FIXED, TestUser.ID);
 
         seeder.run(null);
         long[] first = counts();
@@ -434,6 +441,7 @@ class ApiIntegrationTest {
 
     private void seedTransaction(String categoryId, TransactionType type, String amount, String date) {
         Transaction tx = new Transaction();
+        tx.setUserId(TestUser.ID);
         tx.setType(type);
         tx.setAmount(new BigDecimal(amount));
         tx.setDescription("tx " + date);
@@ -446,9 +454,60 @@ class ApiIntegrationTest {
 
     private void seedBudget(String categoryId, String month, String limit) {
         Budget budget = new Budget();
+        budget.setUserId(TestUser.ID);
         budget.setCategoryId(categoryId);
         budget.setMonth(month);
         budget.setLimitAmount(new BigDecimal(limit));
         budgets.save(budget);
+    }
+
+    @Test
+    void endpointsRequireAuthenticationButHealthAndSignInArePublic() throws Exception {
+        mvc.perform(get("/api/v1/transactions").with(anonymous()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        mvc.perform(get("/api/v1/categories").with(anonymous())).andExpect(status().isUnauthorized());
+        mvc.perform(get("/actuator/health").with(anonymous())).andExpect(status().isOk());
+        // no Google client id is configured in tests: sign-in is reachable but reports it is unavailable
+        mvc.perform(post("/api/v1/auth/google").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"credential\":\"x\"}"))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void usersOnlySeeAndChangeTheirOwnData() throws Exception {
+        String txId = createTransaction("EXPENSE", "42.50", "Mine", "2026-09-10", "food");
+        String goalId = createGoal("Laptop", "1000.00");
+        mvc.perform(post("/api/v1/budgets").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryId\":\"food\",\"month\":\"2026-09\",\"limitAmount\":1000}"))
+                .andExpect(status().isCreated());
+
+        RequestPostProcessor other = user("user-2");
+        mvc.perform(get("/api/v1/transactions").with(other))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(get("/api/v1/transactions/" + txId).with(other)).andExpect(status().isNotFound());
+        mvc.perform(put("/api/v1/transactions/" + txId).with(other).contentType(MediaType.APPLICATION_JSON)
+                        .content(transactionJson("EXPENSE", "1", "Hijacked", "2026-09-10", "food")))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/transactions/" + txId).with(other)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/goals").with(other)).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(post("/api/v1/goals/" + goalId + "/contributions").with(other)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"amount\":10}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/budgets").with(other).param("month", "2026-09"))
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/dashboard").with(other).param("month", "2026-09"))
+                .andExpect(jsonPath("$.totalExpenses").value(0.0));
+
+        // the same budget (category + month) is allowed for another user
+        mvc.perform(post("/api/v1/budgets").with(other).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryId\":\"food\",\"month\":\"2026-09\",\"limitAmount\":300}"))
+                .andExpect(status().isCreated());
+
+        // the owner still has everything
+        mvc.perform(get("/api/v1/transactions/" + txId)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/budgets").param("month", "2026-09"))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].limitAmount").value(1000.0));
     }
 }

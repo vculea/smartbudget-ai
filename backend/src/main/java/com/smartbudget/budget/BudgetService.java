@@ -1,5 +1,6 @@
 package com.smartbudget.budget;
 
+import com.smartbudget.auth.CurrentUser;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -25,13 +26,15 @@ public class BudgetService {
     private final CategoryService categoryService;
     private final TransactionStatsService statsService;
     private final Clock clock;
+    private final CurrentUser currentUser;
 
     public BudgetService(BudgetRepository repository, CategoryService categoryService,
-                         TransactionStatsService statsService, Clock clock) {
+                         TransactionStatsService statsService, Clock clock, CurrentUser currentUser) {
         this.repository = repository;
         this.categoryService = categoryService;
         this.statsService = statsService;
         this.clock = clock;
+        this.currentUser = currentUser;
     }
 
     public List<BudgetResponse> list(YearMonth month) {
@@ -42,7 +45,7 @@ public class BudgetService {
 
     /** Variant for callers that already computed the monthly expenses per category. */
     public List<BudgetResponse> list(YearMonth month, Map<String, BigDecimal> spentByCategory) {
-        List<Budget> budgets = repository.findByMonth(month.toString());
+        List<Budget> budgets = repository.findByUserIdAndMonth(currentUser.id(), month.toString());
         Map<String, Category> categories = categoryService.getByIds(
                 budgets.stream().map(Budget::getCategoryId).distinct().toList());
         return budgets.stream()
@@ -61,7 +64,7 @@ public class BudgetService {
     /** Yearly view: limits of the same category are summed across the months of the year. */
     public List<BudgetResponse> listForYear(int year, Map<String, BigDecimal> spentByCategory) {
         Map<String, BigDecimal> limitByCategory = new LinkedHashMap<>();
-        for (Budget budget : repository.findByMonthStartingWith(year + "-")) {
+        for (Budget budget : repository.findByUserIdAndMonthStartingWith(currentUser.id(), year + "-")) {
             limitByCategory.merge(budget.getCategoryId(), budget.getLimitAmount(), BigDecimal::add);
         }
         Map<String, Category> categories = categoryService.getByIds(limitByCategory.keySet());
@@ -83,12 +86,14 @@ public class BudgetService {
             throw ApiException.unprocessable("Bugetele pot fi definite doar pentru categorii de cheltuieli.");
         }
         String month = request.month().toString();
-        if (repository.existsByCategoryIdAndMonth(category.getId(), month)) {
+        String userId = currentUser.id();
+        if (repository.existsByUserIdAndCategoryIdAndMonth(userId, category.getId(), month)) {
             throw duplicate();
         }
 
         Budget budget = new Budget();
         Instant now = clock.instant();
+        budget.setUserId(userId);
         budget.setCategoryId(category.getId());
         budget.setMonth(month);
         budget.setLimitAmount(Money.scale(request.limitAmount()));

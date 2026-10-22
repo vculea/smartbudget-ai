@@ -21,7 +21,8 @@ Comenzile `docker compose` se rulează din `backend/`, nu din rădăcina reposit
 
 - Aplicația: <http://localhost:8081> (UI-ul apelează `/api/v1`, proxy nginx către backend; același origin, fără CORS)
 - API / Swagger: <http://localhost:8080/api/v1> · <http://localhost:8080/swagger-ui.html>
-- Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) le încarcă idempotent în MongoDB.
+- Autentificare: doar cu contul Google; vezi secțiunea **Autentificare** de mai jos (necesită `GOOGLE_CLIENT_ID` în `backend/.env`).
+- Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) încarcă categoriile; datele demo ale unui utilizator, doar cu `SEED_USER_ID`.
 - Oprire păstrând datele: `docker compose down`; ștergerea datelor: `docker compose down -v`.
 
 ## Dezvoltare locală (Vite + Maven + MongoDB în Docker)
@@ -117,8 +118,20 @@ Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprasc
 | `VITE_API_BASE_URL`    | `http://localhost:8080/api/v1` (`/api/v1` în imaginea Docker) | URL-ul API-ului Spring Boot                         |
 | `VITE_DEMO_MODE`       | `false` (`true` doar în `.env.demo`)                          | `true` = mock API local; `false` = doar API-ul real |
 | `VITE_MOCK_LATENCY_MS` | `400`                                                         | latență simulată în modul demo                      |
+| `VITE_GOOGLE_CLIENT_ID` | – (în Docker vine din `GOOGLE_CLIENT_ID`)                    | ID-ul clientului OAuth pentru „Sign in with Google” |
 
-Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SWAGGER_ENABLED`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`. Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
+Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SEED_USER_ID`, `SWAGGER_ENABLED`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `AUTH_TOKEN_TTL`, `ALLOWED_EMAILS`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`. Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
+
+## Autentificare (doar cu contul Google)
+
+Aplicația cere autentificare; fiecare utilizator vede doar propriile tranzacții, bugete și obiective (categoriile sunt comune). Nu există parolă proprie: doar „Sign in with Google”.
+
+1. În <https://console.cloud.google.com/apis/credentials> creează un **OAuth client ID** de tip *Web application* (la prima utilizare configurează și *OAuth consent screen*; în modul *Testing* adaugă-ți contul Google ca test user).
+2. La *Authorized JavaScript origins* adaugă adresele de pe care deschizi aplicația: `http://localhost:8081` (Docker) și/sau `http://localhost:5173` (`npm run dev`). Nu e nevoie de redirect URI.
+3. Pune ID-ul în `backend/.env` ca `GOOGLE_CLIENT_ID` (și un `JWT_SECRET` de minimum 32 de caractere), apoi `docker compose up -d --build` (ID-ul intră și în bundle-ul frontendului). Pentru `npm run dev` pune `VITE_GOOGLE_CLIENT_ID` în `.env.local`.
+4. Opțional, `ALLOWED_EMAILS=tu@gmail.com,altcineva@gmail.com` limitează cine se poate autentifica (gol = orice cont Google verificat).
+
+Fluxul: butonul Google returnează un ID token → `POST /auth/google` îl verifică (semnătură, emitent, audiență, expirare, e-mail verificat) și întoarce un token de sesiune (12 h) trimis apoi ca `Authorization: Bearer`. Sesiunea se păstrează în `localStorage`; la 401 utilizatorul este readus la pagina de login. Modul demo (`VITE_DEMO_MODE=true`) rămâne fără autentificare.
 
 ## Mod demo
 

@@ -6,8 +6,10 @@ COPY . .
 # Valori compilate în bundle (publice). Cheia AI nu ajunge niciodată în frontend.
 ARG VITE_API_BASE_URL=/api/v1
 ARG VITE_DEMO_MODE=false
+ARG VITE_GOOGLE_CLIENT_ID=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
-    VITE_DEMO_MODE=$VITE_DEMO_MODE
+    VITE_DEMO_MODE=$VITE_DEMO_MODE \
+    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 RUN npm run build
 
 FROM nginx:1.27-alpine

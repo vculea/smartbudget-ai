@@ -1,5 +1,6 @@
 package com.smartbudget.transaction;
 
+import com.smartbudget.auth.CurrentUser;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -19,15 +20,17 @@ public class TransactionStatsService {
     }
 
     private final MongoTemplate mongoTemplate;
+    private final CurrentUser currentUser;
 
-    public TransactionStatsService(MongoTemplate mongoTemplate) {
+    public TransactionStatsService(MongoTemplate mongoTemplate, CurrentUser currentUser) {
         this.mongoTemplate = mongoTemplate;
+        this.currentUser = currentUser;
     }
 
     /** Totals for dates in [from, to] (both inclusive). */
     public PeriodTotals totals(LocalDate from, LocalDate to) {
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("transactionDate").gte(from).lte(to)),
+                Aggregation.match(Criteria.where("userId").is(currentUser.id()).and("transactionDate").gte(from).lte(to)),
                 Aggregation.group("type").sum("amount").as("total"));
         BigDecimal income = BigDecimal.ZERO;
         BigDecimal expenses = BigDecimal.ZERO;
@@ -45,7 +48,8 @@ public class TransactionStatsService {
     /** Expense totals per category id for dates in [from, to]. */
     public Map<String, BigDecimal> expensesByCategory(LocalDate from, LocalDate to) {
         Aggregation aggregation = Aggregation.newAggregation(
-                Aggregation.match(Criteria.where("transactionDate").gte(from).lte(to)
+                Aggregation.match(Criteria.where("userId").is(currentUser.id())
+                        .and("transactionDate").gte(from).lte(to)
                         .and("type").is(TransactionType.EXPENSE)),
                 Aggregation.group("categoryId").sum("amount").as("total"));
         Map<String, BigDecimal> result = new HashMap<>();

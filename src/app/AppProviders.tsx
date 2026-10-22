@@ -2,6 +2,7 @@ import { CssBaseline, ThemeProvider } from "@mui/material";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { SnackbarProvider } from "notistack";
 import { useState, type ReactNode } from "react";
+import { AuthProvider } from "../auth/AuthContext";
 import { PeriodProvider } from "./PeriodContext";
 import { createQueryClient } from "./queryClient";
 import { theme } from "./theme";
@@ -22,7 +23,9 @@ export function AppProviders({ children, queryClient }: AppProvidersProps) {
           autoHideDuration={4000}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
-          <PeriodProvider>{children}</PeriodProvider>
+          <AuthProvider>
+            <PeriodProvider>{children}</PeriodProvider>
+          </AuthProvider>
         </SnackbarProvider>
       </QueryClientProvider>
     </ThemeProvider>
