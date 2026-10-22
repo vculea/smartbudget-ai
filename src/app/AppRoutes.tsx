@@ -1,0 +1,44 @@
+import { lazy } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AppLayout } from "../components/layout/AppLayout";
+import { NotFoundPage } from "../features/not-found/NotFoundPage";
+
+const DashboardPage = lazy(() =>
+  import("../features/dashboard/DashboardPage").then((m) => ({
+    default: m.DashboardPage,
+  })),
+);
+const TransactionsPage = lazy(() =>
+  import("../features/transactions/TransactionsPage").then((m) => ({
+    default: m.TransactionsPage,
+  })),
+);
+const BudgetsPage = lazy(() =>
+  import("../features/budgets/BudgetsPage").then((m) => ({
+    default: m.BudgetsPage,
+  })),
+);
+const GoalsPage = lazy(() =>
+  import("../features/goals/GoalsPage").then((m) => ({ default: m.GoalsPage })),
+);
+const AiInsightsPage = lazy(() =>
+  import("../features/ai-insights/AiInsightsPage").then((m) => ({
+    default: m.AiInsightsPage,
+  })),
+);
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/budgets" element={<BudgetsPage />} />
+        <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/ai-insights" element={<AiInsightsPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
+}
