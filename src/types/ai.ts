@@ -12,9 +12,10 @@ export interface AiRecommendation {
   categoryId?: string | null;
 }
 
-/** Corp pentru `POST /ai/insights`. */
+/** Corp pentru `POST /ai/insights`: fie `month`, fie `year`. */
 export interface AiInsightsRequest {
   month?: YearMonth;
+  year?: number;
 }
 
 export interface AiInsightsResponse {

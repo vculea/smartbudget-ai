@@ -8,7 +8,8 @@ import java.time.YearMonth;
 import java.util.List;
 
 public record DashboardResponse(
-        YearMonth month,
+        /** YYYY-MM for a monthly view or YYYY for a yearly view. */
+        String month,
         BigDecimal totalIncome,
         BigDecimal totalExpenses,
         /** totalIncome - totalExpenses. */

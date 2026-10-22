@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi, queryKeys } from "../../api";
-import type { YearMonth } from "../../types";
+import type { Period } from "../../types";
 
-export function useDashboardQuery(month: YearMonth) {
+export function useDashboardQuery(period: Period) {
   return useQuery({
-    queryKey: queryKeys.dashboard(month),
-    queryFn: () => dashboardApi.get(month),
+    queryKey: queryKeys.dashboard(period),
+    queryFn: () => dashboardApi.get(period),
   });
 }

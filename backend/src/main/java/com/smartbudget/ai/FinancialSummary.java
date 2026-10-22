@@ -10,7 +10,7 @@ import java.util.List;
  * transaction descriptions or any identifier of the user.
  */
 public record FinancialSummary(
-        YearMonth month,
+        String month,
         BigDecimal totalIncome,
         BigDecimal totalExpenses,
         BigDecimal balance,

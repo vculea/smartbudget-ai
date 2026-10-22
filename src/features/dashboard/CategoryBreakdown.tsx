@@ -22,9 +22,9 @@ export function CategoryBreakdown({
   }));
 
   return (
-    <SectionCard title="Cheltuieli pe categorii" subtitle="Luna selectată">
+    <SectionCard title="Cheltuieli pe categorii" subtitle="Perioada selectată">
       {items.length === 0 ? (
-        <EmptyState icon={PieIcon} title="Nicio cheltuială în această lună" />
+        <EmptyState icon={PieIcon} title="Nicio cheltuială în această perioadă" />
       ) : (
         <>
           <Box

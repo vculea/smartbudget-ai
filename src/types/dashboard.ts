@@ -1,5 +1,5 @@
 import type { Budget } from "./budget";
-import type { YearMonth } from "./common";
+import type { Period, YearMonth } from "./common";
 import type { Goal } from "./goal";
 import type { Transaction } from "./transaction";
 
@@ -18,7 +18,8 @@ export interface CategoryExpense {
 }
 
 export interface DashboardResponse {
-  month: YearMonth;
+  /** `YYYY-MM` pentru o lună, `YYYY` pentru un an întreg. */
+  month: Period;
   totalIncome: number;
   totalExpenses: number;
   /** Venituri minus cheltuieli. */

@@ -1,19 +1,43 @@
 import { Box, IconButton, MenuItem, Select, Stack } from "@mui/material";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useSelectedMonth } from "../../app/MonthContext";
-import { currentMonth, formatMonthLabel, shiftMonth } from "../../utils/date";
+import { useSelectedPeriod } from "../../app/PeriodContext";
+import type { Period } from "../../types";
+import {
+  currentMonth,
+  formatPeriodLabel,
+  isYearPeriod,
+  shiftMonth,
+  shiftPeriod,
+} from "../../utils/date";
 
 const MONTHS_BACK = 23;
 const MONTHS_FORWARD = 1;
 
-export function MonthSelector() {
-  const { month, setMonth } = useSelectedMonth();
+/** Lunile din interval (cele mai noi primele), fiecare an fiind precedat de opțiunea „Anul YYYY”. */
+function buildOptions(selected: Period): Period[] {
   const now = currentMonth();
-  const options = Array.from(
+  const months = Array.from(
     { length: MONTHS_BACK + MONTHS_FORWARD + 1 },
     (_, i) => shiftMonth(now, MONTHS_FORWARD - i),
   );
-  if (!options.includes(month)) options.push(month);
+  const options: Period[] = [];
+  const years = new Set<string>();
+  for (const month of months) {
+    const year = month.slice(0, 4);
+    if (!years.has(year)) {
+      years.add(year);
+      options.push(year);
+    }
+    options.push(month);
+  }
+  if (!options.includes(selected)) options.push(selected);
+  return options;
+}
+
+export function PeriodSelector() {
+  const { period, setPeriod } = useSelectedPeriod();
+  const yearly = isYearPeriod(period);
+  const options = buildOptions(period);
 
   return (
     <Stack
@@ -29,35 +53,40 @@ export function MonthSelector() {
     >
       <IconButton
         size="small"
-        aria-label="Luna anterioară"
-        onClick={() => setMonth(shiftMonth(month, -1))}
+        aria-label={yearly ? "Anul anterior" : "Luna anterioară"}
+        onClick={() => setPeriod(shiftPeriod(period, -1))}
       >
         <ChevronLeft size={18} />
       </IconButton>
       <Box sx={{ minWidth: 150 }}>
         <Select
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
+          value={period}
+          onChange={(event) => setPeriod(event.target.value)}
           variant="standard"
           disableUnderline
           fullWidth
-          inputProps={{ "aria-label": "Selectează luna" }}
+          inputProps={{ "aria-label": "Selectează perioada" }}
+          MenuProps={{ slotProps: { paper: { sx: { maxHeight: 420 } } } }}
           sx={{
             fontWeight: 600,
             "& .MuiSelect-select": { textAlign: "center", py: 0.5 },
           }}
         >
           {options.map((option) => (
-            <MenuItem key={option} value={option}>
-              {formatMonthLabel(option)}
+            <MenuItem
+              key={option}
+              value={option}
+              sx={isYearPeriod(option) ? { fontWeight: 700 } : undefined}
+            >
+              {formatPeriodLabel(option)}
             </MenuItem>
           ))}
         </Select>
       </Box>
       <IconButton
         size="small"
-        aria-label="Luna următoare"
-        onClick={() => setMonth(shiftMonth(month, 1))}
+        aria-label={yearly ? "Anul următor" : "Luna următoare"}
+        onClick={() => setPeriod(shiftPeriod(period, 1))}
       >
         <ChevronRight size={18} />
       </IconButton>

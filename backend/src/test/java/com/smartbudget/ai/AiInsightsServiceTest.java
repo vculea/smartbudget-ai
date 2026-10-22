@@ -51,7 +51,7 @@ class AiInsightsServiceTest {
         assertThat(sent.balance()).isEqualByComparingTo("1500.00");
         assertThat(sent.budgets()).extracting(FinancialSummary.BudgetUsage::category).containsExactly("Alimente");
         assertThat(sent.previousMonths()).isEmpty();
-        assertThat(response.month()).isEqualTo(MONTH);
+        assertThat(response.month()).isEqualTo("2026-09");
         assertThat(response.summary()).isEqualTo("ok");
         assertThat(response.insights()).hasSize(1);
         assertThat(response.generatedAt()).isEqualTo(TestClock.FIXED.instant());
@@ -82,15 +82,36 @@ class AiInsightsServiceTest {
         when(dashboard.get(YearMonth.of(2026, 10))).thenReturn(dashboard("100.00", "50.00"));
         when(ai.analyze(any())).thenReturn(new AiAnalysis("s", List.of()));
 
-        assertThat(service.generate(null).month()).isEqualTo(YearMonth.of(2026, 10));
+        service.generate(null);
+
+        verify(dashboard).get(YearMonth.of(2026, 10));
+    }
+
+    @Test
+    void yearlyAnalysisSendsAllMonthsOfTheYear() {
+        DashboardResponse yearly = new DashboardResponse("2026", new BigDecimal("100"), new BigDecimal("50"),
+                new BigDecimal("50"), new BigDecimal("50.00"), BigDecimal.ZERO, List.of(), List.of(),
+                List.of(new DashboardResponse.MonthlyTrendPoint(YearMonth.of(2026, 1), BigDecimal.TEN, BigDecimal.ONE),
+                        new DashboardResponse.MonthlyTrendPoint(YearMonth.of(2026, 2), BigDecimal.TEN, BigDecimal.ONE)),
+                List.of(), List.of(), List.of());
+        when(dashboard.getForYear(2026)).thenReturn(yearly);
+        when(ai.analyze(any())).thenReturn(new AiAnalysis("s", List.of()));
+
+        AiInsightsResponse response = service.generateForYear(2026);
+
+        ArgumentCaptor<FinancialSummary> captor = ArgumentCaptor.forClass(FinancialSummary.class);
+        verify(ai).analyze(captor.capture());
+        assertThat(captor.getValue().month()).isEqualTo("2026");
+        assertThat(captor.getValue().previousMonths()).hasSize(2);
+        assertThat(response.month()).isEqualTo("2026");
     }
 
     private static DashboardResponse dashboard(String income, String expenses) {
         BigDecimal inc = new BigDecimal(income);
         BigDecimal exp = new BigDecimal(expenses);
-        BudgetResponse budget = new BudgetResponse("b1", "c1", "Alimente", MONTH, new BigDecimal("1000"),
+        BudgetResponse budget = new BudgetResponse("b1", "c1", "Alimente", MONTH.toString(), new BigDecimal("1000"),
                 new BigDecimal("700"), new BigDecimal("300"), new BigDecimal("70.00"), BudgetStatus.NORMAL);
-        return new DashboardResponse(MONTH, inc, exp, inc.subtract(exp),
+        return new DashboardResponse(MONTH.toString(), inc, exp, inc.subtract(exp),
                 new BigDecimal("25.00"), new BigDecimal("70.00"), List.of(), List.of(),
                 List.of(new DashboardResponse.MonthlyTrendPoint(MONTH, inc, exp)), List.of(budget), List.of(), List.of());
     }

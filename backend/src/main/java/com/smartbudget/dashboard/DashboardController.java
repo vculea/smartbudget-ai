@@ -1,5 +1,7 @@
 package com.smartbudget.dashboard;
 
+import com.smartbudget.common.Years;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Clock;
@@ -23,11 +25,17 @@ public class DashboardController {
     }
 
     @GetMapping
-    @Operation(summary = "Monthly financial indicators",
+    @Operation(summary = "Monthly or yearly financial indicators",
             description = "balance = income - expenses; savingsRate = balance / income * 100 (0 without income); "
                     + "budgetUsedPercentage = spending on budgeted categories / total limits * 100 (0 without budgets). "
-                    + "month format YYYY-MM, defaults to the current month.")
-    public DashboardResponse get(@RequestParam(required = false) YearMonth month) {
+                    + "month format YYYY-MM, defaults to the current month; year=YYYY returns the whole year "
+                    + "(monthlyTrend then contains the 12 months of that year).")
+    public DashboardResponse get(@RequestParam(required = false) YearMonth month,
+                                 @RequestParam(required = false) Integer year) {
+        Years.requireSingleSelector(month, year);
+        if (year != null) {
+            return service.getForYear(Years.require(year));
+        }
         return service.get(month != null ? month : YearMonth.now(clock));
     }
 }

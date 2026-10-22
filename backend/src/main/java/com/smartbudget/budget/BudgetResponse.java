@@ -1,13 +1,13 @@
 package com.smartbudget.budget;
 
 import java.math.BigDecimal;
-import java.time.YearMonth;
 
 public record BudgetResponse(
         String id,
         String categoryId,
         String categoryName,
-        YearMonth month,
+        /** YYYY-MM for a monthly budget or YYYY for budgets aggregated over a year. */
+        String month,
         BigDecimal limitAmount,
         BigDecimal spentAmount,
         /** limit - spent; negative when the budget is exceeded. */

@@ -5,35 +5,36 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { YearMonth } from "../types";
+import type { Period } from "../types";
 import { currentMonth } from "../utils/date";
 
-interface MonthContextValue {
-  month: YearMonth;
-  setMonth: (month: YearMonth) => void;
+interface PeriodContextValue {
+  /** Luna (`YYYY-MM`) sau anul (`YYYY`) selectat. */
+  period: Period;
+  setPeriod: (period: Period) => void;
 }
 
-const MonthContext = createContext<MonthContextValue | null>(null);
+const PeriodContext = createContext<PeriodContextValue | null>(null);
 
-export function MonthProvider({
+export function PeriodProvider({
   children,
-  initialMonth,
+  initialPeriod,
 }: {
   children: ReactNode;
-  initialMonth?: YearMonth;
+  initialPeriod?: Period;
 }) {
-  const [month, setMonth] = useState<YearMonth>(initialMonth ?? currentMonth());
-  const value = useMemo(() => ({ month, setMonth }), [month]);
+  const [period, setPeriod] = useState<Period>(initialPeriod ?? currentMonth());
+  const value = useMemo(() => ({ period, setPeriod }), [period]);
   return (
-    <MonthContext.Provider value={value}>{children}</MonthContext.Provider>
+    <PeriodContext.Provider value={value}>{children}</PeriodContext.Provider>
   );
 }
 
-export function useSelectedMonth(): MonthContextValue {
-  const ctx = useContext(MonthContext);
+export function useSelectedPeriod(): PeriodContextValue {
+  const ctx = useContext(PeriodContext);
   if (!ctx)
     throw new Error(
-      "useSelectedMonth trebuie folosit în interiorul MonthProvider",
+      "useSelectedPeriod trebuie folosit în interiorul PeriodProvider",
     );
   return ctx;
 }

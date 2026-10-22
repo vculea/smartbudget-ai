@@ -178,7 +178,7 @@ class ApiErrorHandlingTest {
     @Test
     void aiInsightsReturnsContractShape() throws Exception {
         when(aiInsightsService.generate(YearMonth.of(2026, 9))).thenReturn(new AiInsightsResponse(
-                YearMonth.of(2026, 9), "Rezumat",
+                "2026-09", "Rezumat",
                 List.of(new AiAnalysis.Insight("Titlu", "Motiv", new BigDecimal("50.00"), AiAnalysis.Priority.HIGH)),
                 TestClock.FIXED.instant()));
 
@@ -201,6 +201,33 @@ class ApiErrorHandlingTest {
                 .andExpect(status().isGatewayTimeout())
                 .andExpect(jsonPath("$.status").value(504))
                 .andExpect(jsonPath("$.message").value("Furnizorul AI nu a răspuns la timp."));
+    }
+
+    @Test
+    void aiInsightsForYearUsesYearlyFigures() throws Exception {
+        when(aiInsightsService.generateForYear(2026)).thenReturn(new AiInsightsResponse(
+                "2026", "Rezumat anual", List.of(), TestClock.FIXED.instant()));
+
+        mvc.perform(post("/api/v1/ai/insights").contentType(MediaType.APPLICATION_JSON).content("{\"year\":2026}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.month").value("2026"))
+                .andExpect(jsonPath("$.summary").value("Rezumat anual"));
+    }
+
+    @Test
+    void monthAndYearTogetherReturn400() throws Exception {
+        mvc.perform(post("/api/v1/ai/insights").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"month\":\"2026-09\",\"year\":2026}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/budgets").param("month", "2026-09").param("year", "2026"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void yearOutOfRangeReturns400() throws Exception {
+        mvc.perform(get("/api/v1/budgets").param("year", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("year")));
     }
 
     @Test

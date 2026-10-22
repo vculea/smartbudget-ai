@@ -12,6 +12,7 @@ import com.smartbudget.transaction.TransactionService;
 import com.smartbudget.transaction.TransactionStatsService;
 import com.smartbudget.transaction.TransactionStatsService.PeriodTotals;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,7 @@ public class DashboardService {
 
     static final int TOP_CATEGORIES = 5;
     static final int TREND_MONTHS = 6;
+    static final int MONTHS_IN_YEAR = 12;
     static final int RECENT_TRANSACTIONS = 5;
 
     private final TransactionStatsService statsService;
@@ -42,15 +44,30 @@ public class DashboardService {
     }
 
     public DashboardResponse get(YearMonth month) {
-        PeriodTotals totals = statsService.totals(month.atDay(1), month.atEndOfMonth());
-        Map<String, BigDecimal> expensesByCategoryId =
-                statsService.expensesByCategory(month.atDay(1), month.atEndOfMonth());
-
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        Map<String, BigDecimal> expensesByCategoryId = statsService.expensesByCategory(from, to);
         List<BudgetResponse> budgets = budgetService.list(month, expensesByCategoryId);
+        return build(month.toString(), from, to, expensesByCategoryId, budgets, trend(month, TREND_MONTHS));
+    }
+
+    public DashboardResponse getForYear(int year) {
+        LocalDate from = LocalDate.of(year, 1, 1);
+        LocalDate to = LocalDate.of(year, 12, 31);
+        Map<String, BigDecimal> expensesByCategoryId = statsService.expensesByCategory(from, to);
+        List<BudgetResponse> budgets = budgetService.listForYear(year, expensesByCategoryId);
+        return build(String.valueOf(year), from, to, expensesByCategoryId, budgets,
+                trend(YearMonth.of(year, 12), MONTHS_IN_YEAR));
+    }
+
+    private DashboardResponse build(String period, LocalDate from, LocalDate to,
+                                    Map<String, BigDecimal> expensesByCategoryId, List<BudgetResponse> budgets,
+                                    List<MonthlyTrendPoint> trend) {
+        PeriodTotals totals = statsService.totals(from, to);
         List<CategoryExpense> breakdown = categoryBreakdown(expensesByCategoryId, totals.expenses());
 
         return new DashboardResponse(
-                month,
+                period,
                 Money.scale(totals.income()),
                 Money.scale(totals.expenses()),
                 Money.scale(DashboardCalculator.balance(totals.income(), totals.expenses())),
@@ -58,10 +75,10 @@ public class DashboardService {
                 DashboardCalculator.budgetUsedPercentage(budgets),
                 breakdown.stream().limit(TOP_CATEGORIES).toList(),
                 breakdown,
-                trend(month),
+                trend,
                 budgets,
                 goalService.list(),
-                transactionService.recent(month.atDay(1), month.atEndOfMonth(), RECENT_TRANSACTIONS));
+                transactionService.recent(from, to, RECENT_TRANSACTIONS));
     }
 
     private List<CategoryExpense> categoryBreakdown(Map<String, BigDecimal> byCategoryId, BigDecimal totalExpenses) {
@@ -76,10 +93,11 @@ public class DashboardService {
                 .toList();
     }
 
-    private List<MonthlyTrendPoint> trend(YearMonth month) {
+    /** The {@code count} months ending with {@code last}. */
+    private List<MonthlyTrendPoint> trend(YearMonth last, int count) {
         List<MonthlyTrendPoint> points = new ArrayList<>();
-        for (int i = TREND_MONTHS - 1; i >= 0; i--) {
-            YearMonth m = month.minusMonths(i);
+        for (int i = count - 1; i >= 0; i--) {
+            YearMonth m = last.minusMonths(i);
             PeriodTotals totals = statsService.totals(m.atDay(1), m.atEndOfMonth());
             points.add(new MonthlyTrendPoint(m, Money.scale(totals.income()), Money.scale(totals.expenses())));
         }

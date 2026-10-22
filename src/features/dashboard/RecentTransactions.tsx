@@ -29,7 +29,7 @@ export function RecentTransactions({
       {transactions.length === 0 ? (
         <EmptyState
           icon={ReceiptText}
-          title="Nicio tranzacție în această lună"
+          title="Nicio tranzacție în această perioadă"
         />
       ) : (
         <Stack component="ul" sx={{ listStyle: "none", p: 0, m: 0 }}>

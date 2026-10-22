@@ -9,8 +9,10 @@ import com.smartbudget.transaction.TransactionType;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.dao.DuplicateKeyException;
@@ -50,6 +52,31 @@ public class BudgetService {
                 .toList();
     }
 
+    public List<BudgetResponse> listForYear(int year) {
+        Map<String, BigDecimal> spentByCategory =
+                statsService.expensesByCategory(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31));
+        return listForYear(year, spentByCategory);
+    }
+
+    /** Yearly view: limits of the same category are summed across the months of the year. */
+    public List<BudgetResponse> listForYear(int year, Map<String, BigDecimal> spentByCategory) {
+        Map<String, BigDecimal> limitByCategory = new LinkedHashMap<>();
+        for (Budget budget : repository.findByMonthStartingWith(year + "-")) {
+            limitByCategory.merge(budget.getCategoryId(), budget.getLimitAmount(), BigDecimal::add);
+        }
+        Map<String, Category> categories = categoryService.getByIds(limitByCategory.keySet());
+        String yearKey = String.valueOf(year);
+        return limitByCategory.entrySet().stream()
+                .map(entry -> {
+                    Category category = categories.get(entry.getKey());
+                    BigDecimal limit = entry.getValue();
+                    BigDecimal spent = spentByCategory.getOrDefault(entry.getKey(), BigDecimal.ZERO);
+                    return toResponse(yearKey + ":" + entry.getKey(), entry.getKey(), category, yearKey, limit, spent);
+                })
+                .sorted(Comparator.comparing(BudgetResponse::categoryName, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .toList();
+    }
+
     public BudgetResponse create(BudgetRequest request) {
         Category category = categoryService.getById(request.categoryId());
         if (category.getType() != TransactionType.EXPENSE) {
@@ -83,9 +110,13 @@ public class BudgetService {
     }
 
     private BudgetResponse toResponse(Budget budget, Category category, BigDecimal spent) {
-        BigDecimal limit = budget.getLimitAmount();
-        return new BudgetResponse(budget.getId(), budget.getCategoryId(),
-                category == null ? null : category.getName(), YearMonth.parse(budget.getMonth()),
+        return toResponse(budget.getId(), budget.getCategoryId(), category, budget.getMonth(),
+                budget.getLimitAmount(), spent);
+    }
+
+    private BudgetResponse toResponse(String id, String categoryId, Category category, String period,
+                                      BigDecimal limit, BigDecimal spent) {
+        return new BudgetResponse(id, categoryId, category == null ? null : category.getName(), period,
                 Money.scale(limit), Money.scale(spent), Money.scale(limit.subtract(spent)),
                 Money.percentage(spent, limit), BudgetCalculator.status(spent, limit));
     }

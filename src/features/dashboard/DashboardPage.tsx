@@ -1,10 +1,10 @@
 import { Box, Grid, Skeleton } from "@mui/material";
-import { useSelectedMonth } from "../../app/MonthContext";
+import { useSelectedPeriod } from "../../app/PeriodContext";
 import { getErrorMessage } from "../../api";
 import { ErrorState } from "../../components/common/ErrorState";
-import { MonthSelector } from "../../components/common/MonthSelector";
+import { PeriodSelector } from "../../components/common/PeriodSelector";
 import { PageHeader } from "../../components/common/PageHeader";
-import { formatMonthLabel } from "../../utils/date";
+import { formatPeriodLabel, isYearPeriod } from "../../utils/date";
 import { useCategories } from "../categories/useCategories";
 import { AiPromoCard } from "./AiPromoCard";
 import { BudgetsOverview } from "./BudgetsOverview";
@@ -46,16 +46,16 @@ function DashboardSkeleton() {
 }
 
 export function DashboardPage() {
-  const { month } = useSelectedMonth();
-  const { data, isLoading, isError, error, refetch } = useDashboardQuery(month);
+  const { period } = useSelectedPeriod();
+  const { data, isLoading, isError, error, refetch } = useDashboardQuery(period);
   const { byId } = useCategories();
 
   return (
     <>
       <PageHeader
         title="Dashboard"
-        subtitle={`Situația financiară pentru ${formatMonthLabel(month).toLowerCase()}.`}
-        actions={<MonthSelector />}
+        subtitle={`Situația financiară pentru ${formatPeriodLabel(period).toLowerCase()}.`}
+        actions={<PeriodSelector />}
       />
 
       {isLoading ? (
@@ -70,7 +70,10 @@ export function DashboardPage() {
           <SummaryCards data={data} />
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, lg: 8 }}>
-              <TrendChart data={data.monthlyTrend} />
+              <TrendChart
+                data={data.monthlyTrend}
+                yearly={isYearPeriod(period)}
+              />
             </Grid>
             <Grid size={{ xs: 12, lg: 4 }}>
               <CategoryBreakdown

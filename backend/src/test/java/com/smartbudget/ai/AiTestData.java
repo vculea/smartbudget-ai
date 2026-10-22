@@ -18,7 +18,7 @@ final class AiTestData {
     }
 
     static FinancialSummary summary() {
-        return new FinancialSummary(YearMonth.of(2026, 9), new BigDecimal("6000.00"), new BigDecimal("4500.00"),
+        return new FinancialSummary("2026-09", new BigDecimal("6000.00"), new BigDecimal("4500.00"),
                 new BigDecimal("1500.00"), new BigDecimal("25.00"), new BigDecimal("70.00"),
                 List.of(new FinancialSummary.CategorySpending("Chirie", new BigDecimal("1800.00"), new BigDecimal("40.00"))),
                 List.of(), List.of(), List.of());

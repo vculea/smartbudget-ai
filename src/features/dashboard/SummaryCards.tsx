@@ -2,9 +2,11 @@ import { Box } from "@mui/material";
 import { PiggyBank, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { StatCard } from "../../components/common/StatCard";
 import type { DashboardResponse } from "../../types";
+import { isYearPeriod } from "../../utils/date";
 import { formatCurrency, formatPercent } from "../../utils/format";
 
 export function SummaryCards({ data }: { data: DashboardResponse }) {
+  const yearly = isYearPeriod(data.month);
   return (
     <Box
       sx={{
@@ -30,7 +32,7 @@ export function SummaryCards({ data }: { data: DashboardResponse }) {
         tone="red"
       />
       <StatCard
-        label="Sold lunar"
+        label={yearly ? "Sold anual" : "Sold lunar"}
         value={formatCurrency(data.balance)}
         icon={Wallet}
         tone={data.balance >= 0 ? "indigo" : "red"}
@@ -41,7 +43,7 @@ export function SummaryCards({ data }: { data: DashboardResponse }) {
         value={formatPercent(data.savingsRate, 1)}
         icon={PiggyBank}
         tone="violet"
-        caption="Din veniturile lunii"
+        caption={yearly ? "Din veniturile anului" : "Din veniturile lunii"}
       />
     </Box>
   );

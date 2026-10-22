@@ -13,12 +13,12 @@ import type {
   TransactionInput,
   TransactionQuery,
   TransactionScan,
-  YearMonth,
+  Period,
 } from "../types";
 
 /** Contractele serviciilor; implementate de clientul HTTP real și de mock-ul demo. */
 export interface DashboardApi {
-  get(month: YearMonth): Promise<DashboardResponse>;
+  get(period: Period): Promise<DashboardResponse>;
 }
 
 export interface TransactionsApi {
@@ -35,7 +35,7 @@ export interface CategoriesApi {
 }
 
 export interface BudgetsApi {
-  list(month: YearMonth): Promise<Budget[]>;
+  list(period: Period): Promise<Budget[]>;
   create(input: BudgetInput): Promise<Budget>;
 }
 

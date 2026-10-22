@@ -18,7 +18,7 @@ export function BudgetsOverview({ budgets }: { budgets: Budget[] }) {
   return (
     <SectionCard
       title="Bugete"
-      subtitle="Cele mai utilizate în luna selectată"
+      subtitle="Cele mai utilizate în perioada selectată"
       action={
         <Button component={Link} to="/budgets" size="small">
           Vezi toate

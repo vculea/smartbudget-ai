@@ -1,4 +1,4 @@
-import type { IsoDate, YearMonth } from "../types";
+import type { IsoDate, Period, YearMonth } from "../types";
 
 const LOCALE = "ro-RO";
 
@@ -61,6 +61,32 @@ export function formatMonthLabel(
           .format(date)
           .replace(".", "");
   return capitalize(label);
+}
+
+/** Perioadele de tip an sunt `YYYY`; lunile sunt `YYYY-MM`. */
+export function isYearPeriod(period: Period): boolean {
+  return /^\d{4}$/.test(period);
+}
+
+export function yearOf(period: Period): number {
+  return Number(period.slice(0, 4));
+}
+
+export function shiftPeriod(period: Period, delta: number): Period {
+  return isYearPeriod(period)
+    ? String(Number(period) + delta)
+    : shiftMonth(period, delta);
+}
+
+export function formatPeriodLabel(period: Period): string {
+  return isYearPeriod(period) ? `Anul ${period}` : formatMonthLabel(period);
+}
+
+/** Parametrii de interogare / corp acceptați de backend pentru o perioadă. */
+export function periodParams(
+  period: Period,
+): { month: YearMonth } | { year: number } {
+  return isYearPeriod(period) ? { year: Number(period) } : { month: period };
 }
 
 export function formatDate(iso: IsoDate): string {

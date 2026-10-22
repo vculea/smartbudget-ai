@@ -22,12 +22,20 @@ public class AiInsightsService {
 
     public AiInsightsResponse generate(YearMonth requestedMonth) {
         YearMonth month = requestedMonth != null ? requestedMonth : YearMonth.now(clock);
-        FinancialSummary summary = toSummary(dashboardService.get(month));
+        return analyze(dashboardService.get(month));
+    }
+
+    public AiInsightsResponse generateForYear(int year) {
+        return analyze(dashboardService.getForYear(year));
+    }
+
+    private AiInsightsResponse analyze(DashboardResponse dashboard) {
+        FinancialSummary summary = toSummary(dashboard);
         if (summary.totalIncome().signum() == 0 && summary.totalExpenses().signum() == 0) {
-            throw ApiException.unprocessable("Nu există tranzacții în luna selectată pentru a genera recomandări.");
+            throw ApiException.unprocessable("Nu există tranzacții în perioada selectată pentru a genera recomandări.");
         }
         AiAnalysis analysis = analysisService.analyze(summary);
-        return new AiInsightsResponse(month, analysis.summary(), analysis.insights(), clock.instant());
+        return new AiInsightsResponse(dashboard.month(), analysis.summary(), analysis.insights(), clock.instant());
     }
 
     static FinancialSummary toSummary(DashboardResponse dashboard) {
@@ -50,7 +58,7 @@ public class AiInsightsService {
                                 g.progressPercentage(), g.targetDate(), g.status().name()))
                         .toList(),
                 dashboard.monthlyTrend().stream()
-                        .filter(p -> !p.month().equals(dashboard.month()))
+                        .filter(p -> !p.month().toString().equals(dashboard.month()))
                         .map(p -> new FinancialSummary.MonthTotals(p.month(), p.income(), p.expenses()))
                         .toList());
     }

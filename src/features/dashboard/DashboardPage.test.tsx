@@ -34,4 +34,24 @@ describe("Dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Luna anterioară" }));
     expect(await screen.findByText("Sold lunar")).toBeInTheDocument();
   });
+
+  it("permite selectarea unui an întreg", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppRoutes />, { route: "/dashboard" });
+    await screen.findByText("Sold lunar", {}, { timeout: 5000 });
+
+    await user.click(screen.getByRole("combobox", { name: "Selectează perioada" }));
+    const yearOption = (await screen.findAllByRole("option")).find((o) =>
+      /^Anul \d{4}$/.test(o.textContent ?? ""),
+    );
+    expect(yearOption).toBeDefined();
+    await user.click(yearOption!);
+
+    expect(
+      await screen.findByText("Sold anual", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Anul anterior" }),
+    ).toBeInTheDocument();
+  });
 });

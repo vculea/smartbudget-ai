@@ -6,6 +6,7 @@ import { getBudgetLevelFromStatus } from "../../utils/budget";
 import { getGoalDisplayStatus } from "../../utils/goal";
 import { httpAiInsightsApi, toAiInsightsResponse } from "./aiInsightsApi";
 import { httpBudgetsApi } from "./budgetsApi";
+import { httpDashboardApi } from "./dashboardApi";
 import { httpGoalsApi } from "./goalsApi";
 import { httpTransactionsApi } from "./transactionsApi";
 
@@ -130,6 +131,18 @@ describe("contract HTTP față de backend", () => {
     });
     expect(calls[2]?.url).toBe("/goals/g1/contributions");
     expect(JSON.parse(String(calls[2]?.data))).toEqual({ amount: 50 });
+  });
+
+  it("trimite parametrul year pentru perioade anuale și month pentru lunare", async () => {
+    mockBackend(() => ({ status: 200, data: [] }));
+    await httpBudgetsApi.list("2026");
+    await httpBudgetsApi.list("2026-10");
+    await httpDashboardApi.get("2026");
+
+    expect(calls[0]?.params).toEqual({ year: 2026 });
+    expect(calls[1]?.params).toEqual({ month: "2026-10" });
+    expect(calls[2]?.url).toBe("/dashboard");
+    expect(calls[2]?.params).toEqual({ year: 2026 });
   });
 
   it("mapează insights-urile AI ale backendului în recomandări", async () => {

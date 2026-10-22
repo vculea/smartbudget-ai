@@ -30,8 +30,9 @@ public class OpenAiCompatibleAnalysisService implements AiAnalysisService {
             - Do not give investment, tax or legal advice. Savings estimates are suggestions, not guarantees.
             - suggestedMonthlySaving is a non-negative number in the same currency as the summary and must not exceed totalExpenses.
             - Write all text in Romanian.
+            - The summary covers either one month or a whole year (see "month": YYYY-MM or YYYY); "previousMonths" lists the other months considered.
             Reply with ONLY a JSON object, no markdown, in exactly this shape:
-            {"summary": "short assessment of the month (max 400 characters)",
+            {"summary": "short assessment of the period (max 400 characters)",
              "insights": [{"title": "short title", "reason": "why, citing figures from the summary",
                            "suggestedMonthlySaving": 0.00, "priority": "LOW|MEDIUM|HIGH"}]}""";
 

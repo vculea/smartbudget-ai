@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.budget.BudgetResponse;
@@ -17,6 +18,7 @@ import com.smartbudget.transaction.TransactionStatsService;
 import com.smartbudget.transaction.TransactionStatsService.PeriodTotals;
 import com.smartbudget.transaction.TransactionType;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,23 @@ class DashboardServiceTest {
         assertThat(response.topCategories().get(0).percentage()).isEqualByComparingTo("66.67");
         assertThat(response.monthlyTrend()).hasSize(6);
         assertThat(response.monthlyTrend().get(5).month()).isEqualTo(MONTH);
+    }
+
+    @Test
+    void yearlyDashboardCoversWholeYearWithTwelveMonthTrend() {
+        when(stats.totals(any(), any())).thenReturn(new PeriodTotals(new BigDecimal("60000"), new BigDecimal("45000")));
+        when(stats.expensesByCategory(any(), any())).thenReturn(Map.of());
+        when(categories.getByIds(any())).thenReturn(Map.of());
+        when(budgets.listForYear(eq(2026), any())).thenReturn(List.of());
+
+        DashboardResponse response = service.getForYear(2026);
+
+        verify(stats).totals(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+        assertThat(response.month()).isEqualTo("2026");
+        assertThat(response.savingsRate()).isEqualByComparingTo("25.00");
+        assertThat(response.monthlyTrend()).hasSize(12);
+        assertThat(response.monthlyTrend().get(0).month()).isEqualTo(YearMonth.of(2026, 1));
+        assertThat(response.monthlyTrend().get(11).month()).isEqualTo(YearMonth.of(2026, 12));
     }
 
     @Test
@@ -116,7 +135,7 @@ class DashboardServiceTest {
     }
 
     private static BudgetResponse budget(String limit, String spent) {
-        return new BudgetResponse("b", "c", "Cat", MONTH, new BigDecimal(limit), new BigDecimal(spent),
+        return new BudgetResponse("b", "c", "Cat", MONTH.toString(), new BigDecimal(limit), new BigDecimal(spent),
                 new BigDecimal(limit).subtract(new BigDecimal(spent)), BigDecimal.ZERO, BudgetStatus.NORMAL);
     }
 }

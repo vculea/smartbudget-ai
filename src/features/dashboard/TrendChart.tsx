@@ -15,7 +15,13 @@ import type { MonthlyTrendPoint } from "../../types";
 import { formatMonthLabel } from "../../utils/date";
 import { formatCompact, formatCurrency } from "../../utils/format";
 
-export function TrendChart({ data }: { data: MonthlyTrendPoint[] }) {
+export function TrendChart({
+  data,
+  yearly = false,
+}: {
+  data: MonthlyTrendPoint[];
+  yearly?: boolean;
+}) {
   const chartData = data.map((point) => ({
     ...point,
     label: formatMonthLabel(point.month, "short"),
@@ -25,7 +31,7 @@ export function TrendChart({ data }: { data: MonthlyTrendPoint[] }) {
   return (
     <SectionCard
       title="Evoluție venituri și cheltuieli"
-      subtitle="Ultimele 6 luni"
+      subtitle={yearly ? "Lunile anului selectat" : `Ultimele ${data.length} luni`}
     >
       <Box
         role="img"

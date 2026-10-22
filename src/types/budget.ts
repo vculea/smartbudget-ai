@@ -1,4 +1,4 @@
-import type { YearMonth } from "./common";
+import type { Period, YearMonth } from "./common";
 
 /** Starea calculată de backend: WARNING de la 80% până la 100% inclusiv, EXCEEDED peste limită. */
 export type BudgetStatus = "NORMAL" | "WARNING" | "EXCEEDED";
@@ -7,7 +7,8 @@ export interface Budget {
   id: string;
   categoryId: string;
   categoryName: string;
-  month: YearMonth;
+  /** `YYYY-MM`, sau `YYYY` când limitele sunt însumate pe un an. */
+  month: Period;
   limitAmount: number;
   spentAmount: number;
   remainingAmount: number;

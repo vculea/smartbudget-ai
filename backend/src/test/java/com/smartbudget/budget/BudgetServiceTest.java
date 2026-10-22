@@ -136,6 +136,26 @@ class BudgetServiceTest {
         assertThat(result.get(2).status()).isEqualTo(BudgetStatus.NORMAL);
     }
 
+    @Test
+    void yearlyListSumsLimitsPerCategoryAndComparesWithYearlySpending() {
+        Budget oct = budget("b1", "c1", "1000");
+        Budget nov = budget("b2", "c1", "500");
+        nov.setMonth("2026-11");
+        when(repository.findByMonthStartingWith("2026-")).thenReturn(List.of(oct, nov));
+        when(categories.getByIds(any())).thenReturn(Map.of("c1", expenseCategory()));
+        when(stats.expensesByCategory(any(), any())).thenReturn(Map.of("c1", new BigDecimal("1800")));
+
+        List<BudgetResponse> result = service.listForYear(2026);
+
+        assertThat(result).hasSize(1);
+        BudgetResponse yearly = result.get(0);
+        assertThat(yearly.month()).isEqualTo("2026");
+        assertThat(yearly.limitAmount()).isEqualByComparingTo("1500.00");
+        assertThat(yearly.spentAmount()).isEqualByComparingTo("1800.00");
+        assertThat(yearly.status()).isEqualTo(BudgetStatus.EXCEEDED);
+        assertThat(yearly.id()).isEqualTo("2026:c1");
+    }
+
     private static Category expenseCategory() {
         return new Category("c1", "Alimente", TransactionType.EXPENSE, null, null);
     }

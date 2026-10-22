@@ -9,16 +9,21 @@ import {
 } from "@mui/material";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { useSelectedMonth } from "../../app/MonthContext";
+import { useSelectedPeriod } from "../../app/PeriodContext";
 import { palette } from "../../app/theme";
 import { getErrorMessage } from "../../api";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingBlock } from "../../components/common/LoadingBlock";
-import { MonthSelector } from "../../components/common/MonthSelector";
+import { PeriodSelector } from "../../components/common/PeriodSelector";
 import { PageHeader } from "../../components/common/PageHeader";
 import { SectionCard } from "../../components/common/SectionCard";
 import type { AiRecommendation } from "../../types";
-import { addMonthsToDate, formatMonthLabel, todayIso } from "../../utils/date";
+import {
+  addMonthsToDate,
+  formatPeriodLabel,
+  periodParams,
+  todayIso,
+} from "../../utils/date";
 import {
   GoalFormDialog,
   type GoalFormInitialValues,
@@ -39,7 +44,7 @@ function toGoalDraft(recommendation: AiRecommendation): GoalFormInitialValues {
 }
 
 export function AiInsightsPage() {
-  const { month } = useSelectedMonth();
+  const { period } = useSelectedPeriod();
   const analysis = useAiAnalysis();
   const [draft, setDraft] = useState<{
     id: string;
@@ -49,7 +54,7 @@ export function AiInsightsPage() {
 
   const runAnalysis = () => {
     setConvertedIds([]);
-    analysis.mutate({ month });
+    analysis.mutate(periodParams(period));
   };
 
   const result = analysis.data;
@@ -59,7 +64,7 @@ export function AiInsightsPage() {
       <PageHeader
         title="AI Financial Coach"
         subtitle="Recomandări personalizate, generate pe baza tranzacțiilor tale."
-        actions={<MonthSelector />}
+        actions={<PeriodSelector />}
       />
 
       <Card
@@ -89,7 +94,7 @@ export function AiInsightsPage() {
                   variant="overline"
                   sx={{ letterSpacing: "0.1em", fontWeight: 700 }}
                 >
-                  Analiză AI · {formatMonthLabel(month)}
+                  Analiză AI · {formatPeriodLabel(period)}
                 </Typography>
               </Stack>
               <Typography component="h2" variant="h5" sx={{ mb: 1 }}>
@@ -155,7 +160,7 @@ export function AiInsightsPage() {
               </Typography>
               {result.recommendations.length === 0 ? (
                 <Alert severity="info">
-                  Nu avem recomandări pentru această lună.
+                  Nu avem recomandări pentru această perioadă.
                 </Alert>
               ) : (
                 <Box

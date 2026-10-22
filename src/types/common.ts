@@ -1,6 +1,9 @@
 /** Lună în format `YYYY-MM`. */
 export type YearMonth = string;
 
+/** Perioadă selectată: o lună (`YYYY-MM`) sau un an întreg (`YYYY`). */
+export type Period = string;
+
 /** Dată în format ISO `YYYY-MM-DD`. */
 export type IsoDate = string;
 

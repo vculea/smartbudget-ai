@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { clampPercent, formatCurrency, formatPercent } from "./format";
 import { getBudgetLevel } from "./budget";
 import { amountField, parseAmount } from "./validation";
-import { shiftMonth } from "./date";
+import {
+  formatPeriodLabel,
+  isYearPeriod,
+  periodParams,
+  shiftMonth,
+  shiftPeriod,
+} from "./date";
 
 describe("formatare", () => {
   it("formatează sumele în RON cu localizarea ro-RO", () => {
@@ -52,5 +58,21 @@ describe("luni", () => {
   it("schimbă luna peste limita anului", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+  });
+});
+
+describe("perioade", () => {
+  it("distinge anii de luni și îi mută cu un an", () => {
+    expect(isYearPeriod("2026")).toBe(true);
+    expect(isYearPeriod("2026-10")).toBe(false);
+    expect(shiftPeriod("2026", -1)).toBe("2025");
+    expect(shiftPeriod("2026-10", 1)).toBe("2026-11");
+  });
+
+  it("formatează eticheta și parametrii de interogare", () => {
+    expect(formatPeriodLabel("2026")).toBe("Anul 2026");
+    expect(formatPeriodLabel("2026-10")).toBe("Octombrie 2026");
+    expect(periodParams("2026")).toEqual({ year: 2026 });
+    expect(periodParams("2026-10")).toEqual({ month: "2026-10" });
   });
 });

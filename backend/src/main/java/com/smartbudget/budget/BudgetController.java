@@ -1,5 +1,7 @@
 package com.smartbudget.budget;
 
+import com.smartbudget.common.Years;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,9 +31,15 @@ public class BudgetController {
     }
 
     @GetMapping
-    @Operation(summary = "List budgets of a month with spent amount, remaining amount, percentage and status",
-            description = "month format YYYY-MM; defaults to the current month.")
-    public List<BudgetResponse> list(@RequestParam(required = false) YearMonth month) {
+    @Operation(summary = "List budgets of a month (or of a year) with spent amount, remaining amount, percentage and status",
+            description = "month format YYYY-MM; defaults to the current month. With year=YYYY the limits of each "
+                    + "category are summed over the 12 months and compared with the yearly spending.")
+    public List<BudgetResponse> list(@RequestParam(required = false) YearMonth month,
+                                     @RequestParam(required = false) Integer year) {
+        Years.requireSingleSelector(month, year);
+        if (year != null) {
+            return service.listForYear(Years.require(year));
+        }
         return service.list(month != null ? month : YearMonth.now(clock));
     }
 

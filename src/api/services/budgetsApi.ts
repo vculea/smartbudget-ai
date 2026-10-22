@@ -1,11 +1,12 @@
 import type { BudgetsApi } from "../contracts";
 import { http } from "../http";
 import type { Budget } from "../../types";
+import { periodParams } from "../../utils/date";
 
 export const httpBudgetsApi: BudgetsApi = {
-  async list(month) {
+  async list(period) {
     const { data } = await http.get<Budget[]>("/budgets", {
-      params: { month },
+      params: periodParams(period),
     });
     return data;
   },

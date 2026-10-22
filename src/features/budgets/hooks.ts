@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { budgetsApi, getErrorMessage, queryKeys } from "../../api";
 import { useToast } from "../../app/useToast";
-import type { BudgetInput, YearMonth } from "../../types";
+import type { BudgetInput, Period } from "../../types";
 
-export function useBudgetsQuery(month: YearMonth) {
+export function useBudgetsQuery(period: Period) {
   return useQuery({
-    queryKey: queryKeys.budgetList(month),
-    queryFn: () => budgetsApi.list(month),
+    queryKey: queryKeys.budgetList(period),
+    queryFn: () => budgetsApi.list(period),
   });
 }
 

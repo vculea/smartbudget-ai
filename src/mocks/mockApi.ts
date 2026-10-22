@@ -14,11 +14,17 @@ import type {
   CategoryExpense,
   DashboardResponse,
   Goal,
+  Period,
   Transaction,
   YearMonth,
 } from "../types";
 import { formatCurrency, formatPercent } from "../utils/format";
-import { formatMonthLabel, shiftMonth, todayIso } from "../utils/date";
+import {
+  formatPeriodLabel,
+  isYearPeriod,
+  shiftMonth,
+  todayIso,
+} from "../utils/date";
 import {
   CATEGORY,
   type DemoDb,
@@ -78,6 +84,30 @@ function toBudget(db: DemoDb, stored: StoredBudget): Budget {
   };
 }
 
+/** Pentru un an, limitele aceleiași categorii sunt însumate pe toate lunile. */
+function budgetsForPeriod(db: DemoDb, period: Period): Budget[] {
+  if (!isYearPeriod(period)) {
+    return db.budgets
+      .filter((b) => b.month === period)
+      .map((b) => toBudget(db, b));
+  }
+  const byCategory = new Map<string, StoredBudget>();
+  db.budgets
+    .filter((b) => b.month.startsWith(period))
+    .forEach((b) => {
+      const existing = byCategory.get(b.categoryId);
+      byCategory.set(b.categoryId, {
+        id: `${period}:${b.categoryId}`,
+        categoryId: b.categoryId,
+        month: period,
+        limitAmount: round2((existing?.limitAmount ?? 0) + b.limitAmount),
+      });
+    });
+  return [...byCategory.values()]
+    .map((b) => toBudget(db, b))
+    .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+}
+
 function toGoal(stored: StoredGoal): Goal {
   const completed = stored.currentAmount >= stored.targetAmount;
   return {
@@ -93,7 +123,7 @@ function toGoal(stored: StoredGoal): Goal {
   };
 }
 
-function monthTotals(db: DemoDb, month: YearMonth) {
+function monthTotals(db: DemoDb, month: Period) {
   const inMonth = db.transactions.filter((t) =>
     t.transactionDate.startsWith(month),
   );
@@ -104,7 +134,7 @@ function monthTotals(db: DemoDb, month: YearMonth) {
   };
 }
 
-function expensesByCategory(db: DemoDb, month: YearMonth): CategoryExpense[] {
+function expensesByCategory(db: DemoDb, month: Period): CategoryExpense[] {
   const expenses = db.transactions.filter(
     (t) => t.type === "EXPENSE" && t.transactionDate.startsWith(month),
   );
@@ -145,24 +175,27 @@ function validateTransaction(
 }
 
 export const mockDashboardApi: DashboardApi = {
-  async get(month) {
+  async get(period) {
     await delay();
     const db = loadDb();
-    const { income, expenses, inMonth } = monthTotals(db, month);
+    const { income, expenses, inMonth } = monthTotals(db, period);
     const balance = round2(income - expenses);
-    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
-      const m = shiftMonth(month, i - 5);
+    const trendMonths: YearMonth[] = isYearPeriod(period)
+      ? Array.from(
+          { length: 12 },
+          (_, i) => `${period}-${String(i + 1).padStart(2, "0")}`,
+        )
+      : Array.from({ length: 6 }, (_, i) => shiftMonth(period, i - 5));
+    const monthlyTrend = trendMonths.map((m) => {
       const totals = monthTotals(db, m);
       return { month: m, income: totals.income, expenses: totals.expenses };
     });
-    const budgets = db.budgets
-      .filter((b) => b.month === month)
-      .map((b) => toBudget(db, b));
-    const breakdown = expensesByCategory(db, month);
+    const budgets = budgetsForPeriod(db, period);
+    const breakdown = expensesByCategory(db, period);
     const budgetedLimit = round2(budgets.reduce((s, b) => s + b.limitAmount, 0));
     const budgetedSpent = round2(budgets.reduce((s, b) => s + b.spentAmount, 0));
     const response: DashboardResponse = {
-      month,
+      month: period,
       totalIncome: income,
       totalExpenses: expenses,
       balance,
@@ -285,12 +318,9 @@ export const mockCategoriesApi: CategoriesApi = {
 };
 
 export const mockBudgetsApi: BudgetsApi = {
-  async list(month) {
+  async list(period) {
     await delay();
-    const db = loadDb();
-    return db.budgets
-      .filter((b) => b.month === month)
-      .map((b) => toBudget(db, b));
+    return budgetsForPeriod(loadDb(), period);
   },
 
   async create(input) {
@@ -369,20 +399,22 @@ export const mockAiInsightsApi: AiInsightsApi = {
   async analyze(request) {
     await delay(5);
     const db = loadDb();
-    const month = request.month ?? todayIso().slice(0, 7);
+    const period: Period =
+      request.year !== undefined
+        ? String(request.year)
+        : (request.month ?? todayIso().slice(0, 7));
+    const month = period;
     const { income, expenses } = monthTotals(db, month);
     if (income === 0 && expenses === 0) {
       throw new ApiError(
-        "Nu există suficiente tranzacții în luna selectată pentru a genera o analiză.",
+        "Nu există suficiente tranzacții în perioada selectată pentru a genera o analiză.",
         422,
       );
     }
     const balance = income - expenses;
     const savingsRate = income > 0 ? (balance / income) * 100 : 0;
     const byCategory = expensesByCategory(db, month);
-    const budgets = db.budgets
-      .filter((b) => b.month === month)
-      .map((b) => toBudget(db, b));
+    const budgets = budgetsForPeriod(db, month);
     const recommendations: AiRecommendation[] = [];
 
     const top = byCategory[0];
@@ -449,7 +481,7 @@ export const mockAiInsightsApi: AiInsightsApi = {
     });
 
     const summary =
-      `În ${formatMonthLabel(month).toLowerCase()} ai încasat ${formatCurrency(income)} și ai cheltuit ${formatCurrency(expenses)}, ` +
+      `În ${formatPeriodLabel(month).toLowerCase()} ai încasat ${formatCurrency(income)} și ai cheltuit ${formatCurrency(expenses)}, ` +
       `ceea ce înseamnă un sold de ${formatCurrency(balance)} și o rată de economisire de ${formatPercent(savingsRate, 1)}. ` +
       (top
         ? `Cea mai mare categorie de cheltuieli este ${top.categoryName}.`

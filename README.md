@@ -136,6 +136,8 @@ Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu 
 
 `GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
+Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
+
 `GET /transactions` primește: `page` (de la 0), `size`, `type`, `categoryId`, `startDate`, `endDate`, `search`, `sort` (ex. `transactionDate,desc`) și returnează `{ content, page, size, totalElements, totalPages }`. Toate tipurile sunt în `src/types/`.
 
 Particularități: bugetele au `status` (`NORMAL` / `WARNING` de la 80% / `EXCEEDED` peste 100%) calculat de backend; obiectivele au statusul `ACTIVE` / `COMPLETED` (UI-ul deduce „termen depășit” din `targetDate`, care este opțională); `POST /ai/insights` returnează `insights[]` (`title`, `reason`, `suggestedMonthlySaving`, `priority`), mapate în UI de `src/api/services/aiInsightsApi.ts` în recomandări.
