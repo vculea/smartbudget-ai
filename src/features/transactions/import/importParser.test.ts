@@ -104,6 +104,20 @@ describe("buildDrafts", () => {
     expect(draft?.type).toBe("EXPENSE");
   });
 
+  it("ignoră rândurile cu prea multe date lipsă, dar păstrează cele incomplete", () => {
+    const drafts = buildDrafts(
+      [
+        ["Date", "Description", "Amount"],
+        ["2026-10-03", "Cinema", "40"],
+        ["", "Fără dată", "15"],
+        ["", "Total", ""],
+        ["", "", ""],
+      ],
+      categories,
+    );
+    expect(drafts.map((d) => d.description)).toEqual(["Cinema", "Fără dată"]);
+  });
+
   it("folosește coloana Tip și coloanele Debit/Credit", () => {
     const drafts = buildDrafts(
       [

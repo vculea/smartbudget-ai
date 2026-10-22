@@ -456,7 +456,7 @@ export function buildDrafts(
     return n !== null && n < 0;
   });
 
-  return dataRows.map(({ cells, sourceRow }) => {
+  const drafts = dataRows.map(({ cells, sourceRow }) => {
     let signed = parseLooseNumber(cell(cells, "amount"));
     let explicitType = parseTypeWord(cell(cells, "type"));
     if (signed === null) {
@@ -504,6 +504,17 @@ export function buildDrafts(
       categoryId: category?.id ?? "",
     };
   });
+
+  // Rândurile cu cel puțin două dintre data, descrierea și suma lipsă (totaluri, note de subsol) se ignoră.
+  const complete = drafts.filter(
+    (d) =>
+      [d.transactionDate, d.description.trim(), d.amount].filter(Boolean)
+        .length >= 2,
+  );
+  if (complete.length === 0) {
+    throw new ImportFileError("Fișierul nu conține nicio tranzacție.");
+  }
+  return complete;
 }
 
 /** Primele rânduri ale fișierului, ca text, pentru recunoașterea coloanelor de către AI. */

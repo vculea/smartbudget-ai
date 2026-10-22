@@ -67,6 +67,8 @@ public class TransactionImportAiService {
               "category": a column with a category name; otherwise null.
             - If several columns hold the same kind of value (e.g. the amount in the account currency and in the
               transaction currency), pick the first one.
+            - Rows that are not transactions (totals, balances, notes, footers, rows with most of the date, description
+              and amount cells empty) are ignored by the app, so ignore them too when choosing the columns.
             - Use null for everything that is not present. Never use one column for two fields.
             - "dateFormat" is how text dates are written: "DMY" (day first, e.g. 25.03.2026 or 03/04/2026; the default
               in Romania), "MDY" (month first) or "YMD" (2026-03-25). Decide from the values (a first number above 12
