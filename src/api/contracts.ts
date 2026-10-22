@@ -23,8 +23,8 @@ export interface DashboardApi {
 export interface TransactionsApi {
   list(query: TransactionQuery): Promise<Page<Transaction>>;
   create(input: TransactionInput): Promise<Transaction>;
-  update(id: number, input: TransactionInput): Promise<Transaction>;
-  remove(id: number): Promise<void>;
+  update(id: string, input: TransactionInput): Promise<Transaction>;
+  remove(id: string): Promise<void>;
 }
 
 export interface CategoriesApi {
@@ -39,7 +39,7 @@ export interface BudgetsApi {
 export interface GoalsApi {
   list(): Promise<Goal[]>;
   create(input: GoalInput): Promise<Goal>;
-  contribute(id: number, input: ContributionInput): Promise<Goal>;
+  contribute(id: string, input: ContributionInput): Promise<Goal>;
 }
 
 export interface AiInsightsApi {

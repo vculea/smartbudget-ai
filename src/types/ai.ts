@@ -9,7 +9,7 @@ export interface AiRecommendation {
   priority: RecommendationPriority;
   /** Estimare orientativă, nu o garanție. */
   estimatedMonthlySavings: number;
-  categoryId?: number | null;
+  categoryId?: string | null;
 }
 
 /** Corp pentru `POST /ai/insights`. */

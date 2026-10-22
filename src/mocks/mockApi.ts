@@ -69,15 +69,20 @@ function toBudget(db: DemoDb, stored: StoredBudget): Budget {
     remainingAmount: round2(stored.limitAmount - spent),
     percentageUsed:
       stored.limitAmount > 0 ? round2((spent / stored.limitAmount) * 100) : 0,
+    status:
+      spent > stored.limitAmount
+        ? "EXCEEDED"
+        : spent >= stored.limitAmount * 0.8
+          ? "WARNING"
+          : "NORMAL",
   };
 }
 
 function toGoal(stored: StoredGoal): Goal {
   const completed = stored.currentAmount >= stored.targetAmount;
-  const overdue = !completed && stored.targetDate < todayIso();
   return {
     ...stored,
-    status: completed ? "COMPLETED" : overdue ? "OVERDUE" : "ACTIVE",
+    status: completed ? "COMPLETED" : "ACTIVE",
     progressPercentage:
       stored.targetAmount > 0
         ? Math.min(
@@ -104,7 +109,7 @@ function expensesByCategory(db: DemoDb, month: YearMonth): CategoryExpense[] {
     (t) => t.type === "EXPENSE" && t.transactionDate.startsWith(month),
   );
   const total = sumBy(expenses);
-  const totals = new Map<number, number>();
+  const totals = new Map<string, number>();
   expenses.forEach((t) =>
     totals.set(t.categoryId, (totals.get(t.categoryId) ?? 0) + t.amount),
   );
@@ -124,7 +129,7 @@ function validateTransaction(
   input: {
     amount: number;
     description: string;
-    categoryId: number;
+    categoryId: string;
     type: string;
   },
 ) {
@@ -150,22 +155,30 @@ export const mockDashboardApi: DashboardApi = {
       const totals = monthTotals(db, m);
       return { month: m, income: totals.income, expenses: totals.expenses };
     });
+    const budgets = db.budgets
+      .filter((b) => b.month === month)
+      .map((b) => toBudget(db, b));
+    const breakdown = expensesByCategory(db, month);
+    const budgetedLimit = round2(budgets.reduce((s, b) => s + b.limitAmount, 0));
+    const budgetedSpent = round2(budgets.reduce((s, b) => s + b.spentAmount, 0));
     const response: DashboardResponse = {
       month,
       totalIncome: income,
       totalExpenses: expenses,
       balance,
       savingsRate: income > 0 ? round2((balance / income) * 100) : 0,
+      budgetUsedPercentage:
+        budgetedLimit > 0 ? round2((budgetedSpent / budgetedLimit) * 100) : 0,
+      topCategories: breakdown.slice(0, 5),
       monthlyTrend,
-      expensesByCategory: expensesByCategory(db, month),
-      budgets: db.budgets
-        .filter((b) => b.month === month)
-        .map((b) => toBudget(db, b)),
+      expensesByCategory: breakdown,
+      budgets,
       goals: db.goals.map(toGoal),
       recentTransactions: [...inMonth]
         .sort(
           (a, b) =>
-            b.transactionDate.localeCompare(a.transactionDate) || b.id - a.id,
+            b.transactionDate.localeCompare(a.transactionDate) ||
+            Number(b.id) - Number(a.id),
         )
         .slice(0, 6)
         .map((t) => toTransaction(db, t)),
@@ -193,7 +206,7 @@ export const mockTransactionsApi: TransactionsApi = {
         query.sortBy === "amount"
           ? a.amount - b.amount
           : a.transactionDate.localeCompare(b.transactionDate);
-      return primary * direction || b.id - a.id;
+      return primary * direction || Number(b.id) - Number(a.id);
     });
     const start = query.page * query.size;
     const content = filtered
@@ -213,7 +226,7 @@ export const mockTransactionsApi: TransactionsApi = {
     const db = loadDb();
     validateTransaction(db, input);
     const stored: StoredTransaction = {
-      id: db.nextId.transaction++,
+      id: String(db.nextId.transaction++),
       ...input,
       description: input.description.trim(),
     };
@@ -286,7 +299,7 @@ export const mockBudgetsApi: BudgetsApi = {
     }
     if (!(input.limitAmount > 0))
       throw new ApiError("Limita trebuie să fie mai mare decât 0.", 400);
-    const stored: StoredBudget = { id: db.nextId.budget++, ...input };
+    const stored: StoredBudget = { id: String(db.nextId.budget++), ...input };
     db.budgets.push(stored);
     saveDb(db);
     return toBudget(db, stored);
@@ -305,11 +318,11 @@ export const mockGoalsApi: GoalsApi = {
     if (!(input.targetAmount > 0))
       throw new ApiError("Suma țintă trebuie să fie mai mare decât 0.", 400);
     const stored: StoredGoal = {
-      id: db.nextId.goal++,
+      id: String(db.nextId.goal++),
       name: input.name.trim(),
       targetAmount: input.targetAmount,
-      currentAmount: input.currentAmount ?? 0,
-      targetDate: input.targetDate,
+      currentAmount: 0,
+      targetDate: input.targetDate ?? null,
     };
     db.goals.push(stored);
     saveDb(db);
@@ -321,6 +334,11 @@ export const mockGoalsApi: GoalsApi = {
     const db = loadDb();
     const goal = db.goals.find((g) => g.id === id);
     if (!goal) throw new ApiError("Obiectivul nu a fost găsit.", 404);
+    if (toGoal(goal).status === "COMPLETED")
+      throw new ApiError(
+        "Obiectivul este deja finalizat și nu mai acceptă contribuții.",
+        409,
+      );
     if (!(input.amount > 0))
       throw new ApiError("Contribuția trebuie să fie mai mare decât 0.", 400);
     goal.currentAmount = round2(goal.currentAmount + input.amount);

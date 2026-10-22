@@ -31,7 +31,7 @@ export function useSaveTransaction() {
   const invalidate = useInvalidateFinanceData();
   const toast = useToast();
   return useMutation({
-    mutationFn: ({ id, input }: { id?: number; input: TransactionInput }) =>
+    mutationFn: ({ id, input }: { id?: string; input: TransactionInput }) =>
       id === undefined
         ? transactionsApi.create(input)
         : transactionsApi.update(id, input),
@@ -52,7 +52,7 @@ export function useDeleteTransaction() {
   const invalidate = useInvalidateFinanceData();
   const toast = useToast();
   return useMutation({
-    mutationFn: (id: number) => transactionsApi.remove(id),
+    mutationFn: (id: string) => transactionsApi.remove(id),
     onSuccess: async () => {
       await invalidate();
       toast.success("Tranzacția a fost ștearsă.");

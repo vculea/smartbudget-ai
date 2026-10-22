@@ -39,7 +39,7 @@ Collections reference each other by id (`categoryId`, `goalId`); nothing is embe
 
 Prerequisites: JDK 21, Maven 3.9+, Docker.
 
-### Everything in Docker (backend + MongoDB)
+### Everything in Docker (frontend + backend + MongoDB)
 
 ```bash
 cd backend
@@ -47,9 +47,10 @@ cp .env.example .env        # edit MONGO_PASSWORD and AI_API_KEY
 docker compose up -d --build
 ```
 
+* UI: <http://localhost:8081> (nginx serves the React build and proxies `/api/` to the backend, same origin)
 * API: <http://localhost:8080/api/v1> · Swagger UI: <http://localhost:8080/swagger-ui.html> · Health: <http://localhost:8080/actuator/health>
-* MongoDB has **no published port** (reachable only from the backend over the compose network) and requires authentication.
-* `SEED_ENABLED=true` (default in `.env.example`) loads idempotent demo data.
+* Backend and frontend ports are published on `127.0.0.1` only. MongoDB has **no published port** (reachable only from the backend over the compose network), requires authentication and stores data in the named volume `mongo-data`.
+* `SEED_ENABLED=true` (default in `.env.example`) loads idempotent demo data. Categories are reference data the API cannot create: if the database has none, default categories are inserted even when seeding is disabled.
 
 ### Local development (backend from Maven, MongoDB in Docker)
 
@@ -64,8 +65,8 @@ With the `dev` profile the demo data is seeded automatically. If you do not use 
 
 ### Frontend
 
-In the repository root set `VITE_DEMO_MODE=false` in `.env.local` (API base URL defaults to `http://localhost:8080/api/v1`)
-and run `npm run dev`. CORS allows `http://localhost:5173` (`CORS_ALLOWED_ORIGINS`).
+In the repository root run `npm run dev` (real API, `http://localhost:8080/api/v1` by default; `npm run dev:demo` uses the local mock instead).
+CORS allows `http://localhost:5173` by default (`CORS_ALLOWED_ORIGINS`, comma separated; add `http://127.0.0.1:5173` if you browse that way).
 
 ### Build and tests
 

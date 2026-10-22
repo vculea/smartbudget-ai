@@ -6,6 +6,7 @@ import { ProgressBar } from "../../components/common/ProgressBar";
 import { SectionCard } from "../../components/common/SectionCard";
 import type { Goal } from "../../types";
 import { formatCurrency, formatPercent } from "../../utils/format";
+import { getGoalDisplayStatus } from "../../utils/goal";
 import { GoalStatusChip, goalProgressTone } from "../goals/GoalStatusChip";
 
 export function GoalsOverview({ goals }: { goals: Goal[] }) {
@@ -38,7 +39,9 @@ export function GoalsOverview({ goals }: { goals: Goal[] }) {
           spacing={2.5}
           sx={{ listStyle: "none", p: 0, m: 0 }}
         >
-          {visible.map((goal) => (
+          {visible.map((goal) => {
+            const displayStatus = getGoalDisplayStatus(goal);
+            return (
             <Box component="li" key={goal.id}>
               <Stack
                 direction="row"
@@ -50,11 +53,11 @@ export function GoalsOverview({ goals }: { goals: Goal[] }) {
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                   {goal.name}
                 </Typography>
-                <GoalStatusChip status={goal.status} />
+                <GoalStatusChip status={displayStatus} />
               </Stack>
               <ProgressBar
                 value={goal.progressPercentage}
-                tone={goalProgressTone(goal.status)}
+                tone={goalProgressTone(displayStatus)}
                 height={8}
                 label={`${goal.name}: ${formatPercent(goal.progressPercentage)} din obiectiv`}
               />
@@ -68,7 +71,8 @@ export function GoalsOverview({ goals }: { goals: Goal[] }) {
                 </Typography>
               </Stack>
             </Box>
-          ))}
+            );
+          })}
         </Stack>
       )}
     </SectionCard>

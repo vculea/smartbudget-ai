@@ -123,7 +123,7 @@ function TransactionForm({
           amount: parseAmount(values.amount),
           description: values.description.trim(),
           transactionDate: values.transactionDate,
-          categoryId: Number(values.categoryId),
+          categoryId: values.categoryId,
         },
       });
       onClose();

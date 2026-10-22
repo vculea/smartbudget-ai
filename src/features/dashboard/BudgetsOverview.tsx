@@ -5,7 +5,7 @@ import { EmptyState } from "../../components/common/EmptyState";
 import { ProgressBar } from "../../components/common/ProgressBar";
 import { SectionCard } from "../../components/common/SectionCard";
 import type { Budget } from "../../types";
-import { getBudgetLevel } from "../../utils/budget";
+import { getBudgetLevelFromStatus } from "../../utils/budget";
 import { formatCurrency, formatPercent } from "../../utils/format";
 
 const TONE = { ok: "primary", warning: "warning", exceeded: "danger" } as const;
@@ -38,7 +38,7 @@ export function BudgetsOverview({ budgets }: { budgets: Budget[] }) {
           sx={{ listStyle: "none", p: 0, m: 0 }}
         >
           {sorted.map((budget) => {
-            const level = getBudgetLevel(budget.percentageUsed);
+            const level = getBudgetLevelFromStatus(budget);
             return (
               <Box component="li" key={budget.id}>
                 <Stack

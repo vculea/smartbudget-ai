@@ -31,7 +31,7 @@ interface BudgetFormDialogProps {
   open: boolean;
   month: YearMonth;
   /** Categoriile care au deja buget în luna selectată. */
-  usedCategoryIds: number[];
+  usedCategoryIds: string[];
   onClose: () => void;
 }
 
@@ -85,7 +85,7 @@ function BudgetForm({
   const onSubmit = handleSubmit(async (values) => {
     try {
       await create.mutateAsync({
-        categoryId: Number(values.categoryId),
+        categoryId: values.categoryId,
         month,
         limitAmount: parseAmount(values.limitAmount),
       });

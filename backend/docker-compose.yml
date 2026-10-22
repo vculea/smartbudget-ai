@@ -33,7 +33,20 @@ services:
       SEED_ENABLED: ${SEED_ENABLED:-false}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8081}:80"
     networks:
       - internal
 

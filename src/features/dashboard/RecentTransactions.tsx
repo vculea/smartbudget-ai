@@ -10,7 +10,7 @@ import { TransactionAmount } from "../transactions/TransactionAmount";
 
 interface RecentTransactionsProps {
   transactions: Transaction[];
-  categoriesById: Map<number, Category>;
+  categoriesById: Map<string, Category>;
 }
 
 export function RecentTransactions({

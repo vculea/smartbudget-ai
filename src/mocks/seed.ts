@@ -14,17 +14,17 @@ import {
 } from "../utils/date";
 
 export interface StoredTransaction {
-  id: number;
+  id: string;
   type: TransactionType;
   amount: number;
   description: string;
   transactionDate: IsoDate;
-  categoryId: number;
+  categoryId: string;
 }
 
 export interface StoredBudget {
-  id: number;
-  categoryId: number;
+  id: string;
+  categoryId: string;
   month: YearMonth;
   limitAmount: number;
 }
@@ -40,21 +40,21 @@ export interface DemoDb {
   goals: StoredGoal[];
 }
 
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const CATEGORY = {
-  groceries: 1,
-  housing: 2,
-  transport: 3,
-  entertainment: 4,
-  health: 5,
-  shopping: 6,
-  restaurants: 7,
-  subscriptions: 8,
-  education: 9,
-  salary: 10,
-  freelance: 11,
-  investments: 12,
+  groceries: "1",
+  housing: "2",
+  transport: "3",
+  entertainment: "4",
+  health: "5",
+  shopping: "6",
+  restaurants: "7",
+  subscriptions: "8",
+  education: "9",
+  salary: "10",
+  freelance: "11",
+  investments: "12",
 } as const;
 
 const categories: Category[] = [
@@ -122,7 +122,7 @@ const categories: Category[] = [
   },
 ];
 
-const BUDGET_LIMITS: Array<[number, number]> = [
+const BUDGET_LIMITS: Array<[string, number]> = [
   [CATEGORY.groceries, 1500],
   [CATEGORY.restaurants, 500],
   [CATEGORY.transport, 450],
@@ -203,7 +203,7 @@ export function createSeed(): DemoDb {
     month: YearMonth,
     day: number,
     type: TransactionType,
-    categoryId: number,
+    categoryId: string,
     description: string,
     amount: number,
   ) => {
@@ -211,7 +211,7 @@ export function createSeed(): DemoDb {
     const date = `${month}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
     if (date > today) return;
     transactions.push({
-      id: nextTxId++,
+      id: String(nextTxId++),
       type,
       amount,
       description,
@@ -353,41 +353,46 @@ export function createSeed(): DemoDb {
   for (let offset = -5; offset <= 0; offset++) {
     const month = shiftMonth(thisMonth, offset);
     for (const [categoryId, limitAmount] of BUDGET_LIMITS) {
-      budgets.push({ id: nextBudgetId++, categoryId, month, limitAmount });
+      budgets.push({
+        id: String(nextBudgetId++),
+        categoryId,
+        month,
+        limitAmount,
+      });
     }
   }
 
   const goals: StoredGoal[] = [
     {
-      id: 1,
+      id: "1",
       name: "Fond de urgență",
       targetAmount: 15000,
       currentAmount: 9200,
       targetDate: addMonthsToDate(today, 8),
     },
     {
-      id: 2,
+      id: "2",
       name: "Vacanță în Grecia",
       targetAmount: 6000,
       currentAmount: 3850,
       targetDate: addMonthsToDate(today, 5),
     },
     {
-      id: 3,
+      id: "3",
       name: "Laptop nou",
       targetAmount: 7500,
       currentAmount: 7500,
       targetDate: addMonthsToDate(today, -1),
     },
     {
-      id: 4,
+      id: "4",
       name: "Avans apartament",
       targetAmount: 50000,
       currentAmount: 12400,
       targetDate: addMonthsToDate(today, 30),
     },
     {
-      id: 5,
+      id: "5",
       name: "Curs de certificare",
       targetAmount: 2500,
       currentAmount: 600,

@@ -6,16 +6,41 @@ Frontend React + TypeScript pentru gestionarea finanțelor personale: tranzacți
 
 React 19, TypeScript (strict), Vite, Material UI 7, React Router, TanStack Query, Recharts, React Hook Form + Zod, Axios, Lucide, Vitest + Testing Library.
 
-## Instalare și pornire
+## Pornire rapidă (aplicația completă, Docker)
+
+Necesită Docker. Frontend (nginx) + backend + MongoDB cu volum persistent; MongoDB nu are port publicat, iar backendul și frontendul sunt expuse doar pe `127.0.0.1`.
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173
+cd backend
+cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
+# editează .env: MONGO_PASSWORD (obligatoriu) și AI_API_KEY (pentru recomandările AI)
+docker compose up -d --build
 ```
+
+* Aplicația: <http://localhost:8081> (UI-ul apelează `/api/v1`, proxy nginx către backend; același origin, fără CORS)
+* API / Swagger: <http://localhost:8080/api/v1> · <http://localhost:8080/swagger-ui.html>
+* Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) le încarcă idempotent în MongoDB.
+* Oprire păstrând datele: `docker compose down`; ștergerea datelor: `docker compose down -v`.
+
+## Dezvoltare locală (Vite + Maven + MongoDB în Docker)
+
+```bash
+# 1) MongoDB (publicat doar pe 127.0.0.1:27017)
+cd backend
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongo
+# 2) Backend (JDK 21, profil dev = date demo + loguri debug)
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# 3) Frontend, în alt terminal, din rădăcina repository-ului
+npm install
+npm run dev            # http://localhost:5173, folosește API-ul real
+```
+
+`npm run dev:demo` pornește frontendul în **mod demo** (mock local, fără backend). Modul este ales explicit la build/pornire; nu există trecere automată între mock și API real, iar un backend indisponibil produce erori vizibile în interfață (cu buton „Reîncearcă”).
 
 | Comandă              | Descriere                                             |
 | -------------------- | ----------------------------------------------------- |
-| `npm run dev`        | server de dezvoltare                                  |
+| `npm run dev`        | server de dezvoltare, API real                        |
+| `npm run dev:demo`   | server de dezvoltare, mod demo (mock în `localStorage`) |
 | `npm run build`      | verificare TypeScript + build de producție în `dist/` |
 | `npm run preview`    | servește build-ul local                               |
 | `npm run typecheck`  | doar verificarea tipurilor                            |
@@ -24,19 +49,19 @@ npm run dev        # http://localhost:5173
 
 ## Variabile de mediu
 
-Copiază `.env.example` în `.env.local` și ajustează:
+Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprascrieri locale copiază `.env.example` în `.env.local`:
 
 | Variabilă              | Implicit                               | Rol                                                 |
 | ---------------------- | -------------------------------------- | --------------------------------------------------- |
-| `VITE_API_BASE_URL`    | `http://localhost:8080/api/v1`         | URL-ul API-ului Spring Boot                         |
-| `VITE_DEMO_MODE`       | `false` (`true` în `.env.development`) | `true` = mock API local; `false` = doar API-ul real |
+| `VITE_API_BASE_URL`    | `http://localhost:8080/api/v1` (`/api/v1` în imaginea Docker) | URL-ul API-ului Spring Boot |
+| `VITE_DEMO_MODE`       | `false` (`true` doar în `.env.demo`)   | `true` = mock API local; `false` = doar API-ul real |
 | `VITE_MOCK_LATENCY_MS` | `400`                                  | latență simulată în modul demo                      |
 
-Pentru a lucra cu backendul real: `VITE_DEMO_MODE=false` în `.env.local`. Nu există trecere automată la mock când backendul eșuează; erorile sunt afișate în interfață.
+Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SWAGGER_ENABLED`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`. Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
 
 ## Mod demo
 
-Cu `VITE_DEMO_MODE=true`, serviciile din `src/api/index.ts` folosesc implementările din `src/mocks/` (date seed realiste pe 6 luni, salvate în `localStorage`). Butonul de resetare din header readuce datele la starea inițială. Mock-ul este separat de clientul HTTP real și implementează aceleași contracte (`src/api/contracts.ts`).
+Cu `VITE_DEMO_MODE=true`, serviciile din `src/api/index.ts` folosesc implementările din `src/mocks/` (date seed realiste pe 6 luni, salvate în `localStorage`). Butonul de resetare din header readuce datele la starea inițială. Mock-ul este separat de clientul HTTP real și implementează aceleași contracte (`src/api/contracts.ts`) și aceeași formă de date ca backendul (id-uri string, `status` la bugete etc.).
 
 ## Structură
 
@@ -54,8 +79,12 @@ src/
     dashboard/ transactions/ budgets/ goals/ ai-insights/ categories/
 ```
 
-## Contract API așteptat
+## Contract API
+
+Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
 `GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 `GET /transactions` primește: `page` (de la 0), `size`, `type`, `categoryId`, `startDate`, `endDate`, `search`, `sort` (ex. `transactionDate,desc`) și returnează `{ content, page, size, totalElements, totalPages }`. Toate tipurile sunt în `src/types/`.
+
+Particularități: bugetele au `status` (`NORMAL` / `WARNING` de la 80% / `EXCEEDED` peste 100%) calculat de backend; obiectivele au statusul `ACTIVE` / `COMPLETED` (UI-ul deduce „termen depășit” din `targetDate`, care este opțională); `POST /ai/insights` returnează `insights[]` (`title`, `reason`, `suggestedMonthlySaving`, `priority`), mapate în UI de `src/api/services/aiInsightsApi.ts` în recomandări.

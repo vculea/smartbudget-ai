@@ -10,6 +10,7 @@ import { CalendarDays, PlusCircle } from "lucide-react";
 import type { Goal } from "../../types";
 import { daysUntil, formatDate } from "../../utils/date";
 import { formatCurrency, formatPercent } from "../../utils/format";
+import { getGoalDisplayStatus } from "../../utils/goal";
 import { ProgressBar } from "../../components/common/ProgressBar";
 import { GoalStatusChip, goalProgressTone } from "./GoalStatusChip";
 
@@ -19,6 +20,7 @@ interface GoalCardProps {
 }
 
 function deadlineText(goal: Goal): string {
+  if (!goal.targetDate) return "Fără termen stabilit";
   if (goal.status === "COMPLETED")
     return `Termen: ${formatDate(goal.targetDate)}`;
   const days = daysUntil(goal.targetDate);
@@ -29,6 +31,7 @@ function deadlineText(goal: Goal): string {
 
 export function GoalCard({ goal, onContribute }: GoalCardProps) {
   const completed = goal.status === "COMPLETED";
+  const displayStatus = getGoalDisplayStatus(goal);
   const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
 
   return (
@@ -50,7 +53,7 @@ export function GoalCard({ goal, onContribute }: GoalCardProps) {
           <Typography component="h3" variant="subtitle1">
             {goal.name}
           </Typography>
-          <GoalStatusChip status={goal.status} />
+          <GoalStatusChip status={displayStatus} />
         </Stack>
 
         <Stack
@@ -72,7 +75,7 @@ export function GoalCard({ goal, onContribute }: GoalCardProps) {
 
         <ProgressBar
           value={goal.progressPercentage}
-          tone={goalProgressTone(goal.status)}
+          tone={goalProgressTone(displayStatus)}
           label={`${goal.name}: ${formatPercent(goal.progressPercentage)} din obiectiv`}
         />
 

@@ -30,7 +30,7 @@ const GOAL_HORIZON_MONTHS = 6;
 
 function toGoalDraft(recommendation: AiRecommendation): GoalFormInitialValues {
   return {
-    name: `Economii: ${recommendation.title}`.slice(0, 120),
+    name: `Economii: ${recommendation.title}`.slice(0, 100),
     targetAmount: Math.round(
       recommendation.estimatedMonthlySavings * GOAL_HORIZON_MONTHS,
     ),

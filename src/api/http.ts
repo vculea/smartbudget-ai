@@ -14,11 +14,16 @@ http.interceptors.response.use(
   (error: unknown) => {
     if (error instanceof AxiosError) {
       if (error.response) {
+        const status = error.response.status;
         const body = error.response.data as ApiErrorBody | undefined;
+        const gateway = status === 502 || status === 503 || status === 504;
         return Promise.reject(
           new ApiError(
-            body?.message ?? `Cererea a eșuat (cod ${error.response.status}).`,
-            error.response.status,
+            body?.message ??
+              (gateway
+                ? "Serverul nu este disponibil momentan. Încearcă din nou."
+                : `Cererea a eșuat (cod ${status}).`),
+            status,
             body?.fieldErrors,
           ),
         );

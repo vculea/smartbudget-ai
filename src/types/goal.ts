@@ -1,13 +1,20 @@
 import type { IsoDate } from "./common";
 
-export type GoalStatus = "ACTIVE" | "COMPLETED" | "OVERDUE";
+/** Statusuri trimise de backend. */
+export type GoalStatus = "ACTIVE" | "COMPLETED";
+
+/** Statusul afișat în UI: `OVERDUE` este derivat local din termen, nu vine din API. */
+export type GoalDisplayStatus = GoalStatus | "OVERDUE";
 
 export interface Goal {
-  id: number;
+  id: string;
   name: string;
+  description?: string | null;
   targetAmount: number;
+  /** Suma contribuțiilor, calculată de backend. */
   currentAmount: number;
-  targetDate: IsoDate;
+  /** Termenul este opțional în backend. */
+  targetDate: IsoDate | null;
   status: GoalStatus;
   /** Procent de progres, 0-100. */
   progressPercentage: number;
@@ -17,8 +24,8 @@ export interface Goal {
 export interface GoalInput {
   name: string;
   targetAmount: number;
-  targetDate: IsoDate;
-  currentAmount?: number;
+  targetDate?: IsoDate;
+  description?: string;
 }
 
 /** Corp pentru `POST /goals/{id}/contributions`. */

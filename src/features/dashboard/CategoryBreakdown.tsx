@@ -9,7 +9,7 @@ import { formatCurrency, formatPercent } from "../../utils/format";
 
 interface CategoryBreakdownProps {
   data: CategoryExpense[];
-  categoriesById: Map<number, Category>;
+  categoriesById: Map<string, Category>;
 }
 
 export function CategoryBreakdown({

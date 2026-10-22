@@ -1,8 +1,8 @@
 import { Chip } from "@mui/material";
-import type { GoalStatus } from "../../types";
+import type { GoalDisplayStatus } from "../../types";
 
 const CONFIG: Record<
-  GoalStatus,
+  GoalDisplayStatus,
   { label: string; color: "primary" | "success" | "error" }
 > = {
   ACTIVE: { label: "Activ", color: "primary" },
@@ -10,12 +10,12 @@ const CONFIG: Record<
   OVERDUE: { label: "Termen depășit", color: "error" },
 };
 
-export function GoalStatusChip({ status }: { status: GoalStatus }) {
+export function GoalStatusChip({ status }: { status: GoalDisplayStatus }) {
   const { label, color } = CONFIG[status];
   return <Chip size="small" label={label} color={color} variant="outlined" />;
 }
 
-export const goalProgressTone = (status: GoalStatus) =>
+export const goalProgressTone = (status: GoalDisplayStatus) =>
   status === "COMPLETED"
     ? "success"
     : status === "OVERDUE"

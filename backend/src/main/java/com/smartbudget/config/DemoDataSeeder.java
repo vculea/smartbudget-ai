@@ -118,6 +118,13 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.info("Demo data seeding finished ({} new documents)", created);
     }
 
+    /** Reference categories shared with {@link DefaultCategoriesInitializer}; ids are deterministic. */
+    public static List<Category> defaultCategories() {
+        return CATEGORIES.stream()
+                .map(c -> new Category(c.id(), c.name(), c.type(), c.color(), c.icon()))
+                .toList();
+    }
+
     private int seedCategories() {
         int created = 0;
         for (Cat c : CATEGORIES) {

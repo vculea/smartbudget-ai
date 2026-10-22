@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import { AlertTriangle } from "lucide-react";
 import type { Budget } from "../../types";
-import { getBudgetLevel } from "../../utils/budget";
+import { getBudgetLevelFromStatus } from "../../utils/budget";
 import { formatCurrency, formatPercent } from "../../utils/format";
 import { BudgetLevelChip } from "../../components/common/BudgetLevelChip";
 import {
@@ -23,7 +23,7 @@ const TONE_BY_LEVEL = {
 } as const satisfies Record<string, ProgressTone>;
 
 export function BudgetCard({ budget }: { budget: Budget }) {
-  const level = getBudgetLevel(budget.percentageUsed);
+  const level = getBudgetLevelFromStatus(budget);
   const exceeded = level === "exceeded";
 
   return (

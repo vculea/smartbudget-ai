@@ -5,14 +5,15 @@ import type { Budget } from "../../types";
 import { BudgetCard } from "./BudgetCard";
 
 const base: Budget = {
-  id: 1,
-  categoryId: 1,
+  id: "1",
+  categoryId: "1",
   categoryName: "Alimente",
   month: "2026-10",
   limitAmount: 1000,
   spentAmount: 500,
   remainingAmount: 500,
   percentageUsed: 50,
+  status: "NORMAL",
 };
 
 describe("BudgetCard", () => {
@@ -30,6 +31,7 @@ describe("BudgetCard", () => {
           spentAmount: 850,
           remainingAmount: 150,
           percentageUsed: 85,
+          status: "WARNING",
         }}
       />,
     );
@@ -45,6 +47,7 @@ describe("BudgetCard", () => {
           spentAmount: 1200,
           remainingAmount: -200,
           percentageUsed: 120,
+          status: "EXCEEDED",
         }}
       />,
     );

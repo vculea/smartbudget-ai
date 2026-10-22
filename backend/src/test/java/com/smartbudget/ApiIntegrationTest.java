@@ -22,6 +22,7 @@ import com.smartbudget.budget.BudgetRepository;
 import com.smartbudget.category.Category;
 import com.smartbudget.category.CategoryRepository;
 import com.smartbudget.common.ApiException;
+import com.smartbudget.config.DefaultCategoriesInitializer;
 import com.smartbudget.config.DemoDataSeeder;
 import com.smartbudget.goal.GoalContributionRepository;
 import com.smartbudget.goal.SavingsGoalRepository;
@@ -386,6 +387,23 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/v1/dashboard").param("month", "2026-10"))
                 .andExpect(jsonPath("$.totalIncome").value(7700.0))
                 .andExpect(jsonPath("$.goals.length()").value(4));
+    }
+
+    @Test
+    void defaultCategoriesAreInsertedOnlyIntoAnEmptyCollection() throws Exception {
+        categories.deleteAll();
+        DefaultCategoriesInitializer initializer = new DefaultCategoriesInitializer(categories);
+
+        initializer.run(null);
+        assertThat(categories.count()).isEqualTo(11);
+
+        categories.deleteById("demo-cat-bonus");
+        initializer.run(null);
+        assertThat(categories.count()).isEqualTo(10);
+
+        mvc.perform(get("/api/v1/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(10));
     }
 
     private long[] counts() {

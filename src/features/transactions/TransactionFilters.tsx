@@ -11,7 +11,7 @@ import type { Category, IsoDate, TransactionType } from "../../types";
 export interface TransactionFilterValues {
   search: string;
   type: "" | TransactionType;
-  categoryId: "" | number;
+  categoryId: "" | string;
   startDate: IsoDate | "";
   endDate: IsoDate | "";
 }
@@ -96,13 +96,8 @@ export function TransactionFilters({
       <TextField
         select
         label="Categorie"
-        value={values.categoryId === "" ? "" : String(values.categoryId)}
-        onChange={(event) =>
-          patch({
-            categoryId:
-              event.target.value === "" ? "" : Number(event.target.value),
-          })
-        }
+        value={values.categoryId}
+        onChange={(event) => patch({ categoryId: event.target.value })}
         sx={{ minWidth: { md: 180 } }}
         slotProps={{
           select: { displayEmpty: true },

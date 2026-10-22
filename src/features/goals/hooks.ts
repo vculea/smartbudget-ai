@@ -41,7 +41,7 @@ export function useAddContribution() {
       goalId,
       input,
     }: {
-      goalId: number;
+      goalId: string;
       input: ContributionInput;
     }) => goalsApi.contribute(goalId, input),
     onSuccess: async (goal) => {

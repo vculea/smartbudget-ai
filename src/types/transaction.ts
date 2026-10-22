@@ -3,13 +3,16 @@ import type { IsoDate, SortDirection } from "./common";
 export type TransactionType = "INCOME" | "EXPENSE";
 
 export interface Transaction {
-  id: number;
+  /** Identificator MongoDB (ObjectId hex), transmis ca string. */
+  id: string;
   type: TransactionType;
   amount: number;
   description: string;
   transactionDate: IsoDate;
-  categoryId: number;
-  categoryName?: string;
+  categoryId: string;
+  categoryName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /** Corp pentru `POST /transactions` și `PUT /transactions/{id}`. */
@@ -18,7 +21,7 @@ export interface TransactionInput {
   amount: number;
   description: string;
   transactionDate: IsoDate;
-  categoryId: number;
+  categoryId: string;
 }
 
 export type TransactionSortField = "transactionDate" | "amount";
@@ -28,7 +31,7 @@ export interface TransactionQuery {
   page: number;
   size: number;
   type?: TransactionType;
-  categoryId?: number;
+  categoryId?: string;
   startDate?: IsoDate;
   endDate?: IsoDate;
   search?: string;

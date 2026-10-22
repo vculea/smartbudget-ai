@@ -25,7 +25,7 @@ import { TransactionAmount } from "./TransactionAmount";
 
 interface TransactionsTableProps {
   transactions: Transaction[];
-  categoriesById: Map<number, Category>;
+  categoriesById: Map<string, Category>;
   sortBy: TransactionSortField;
   sortDir: SortDirection;
   onSort: (field: TransactionSortField) => void;
