@@ -29,11 +29,16 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_READ_TIMEOUT: ${AI_READ_TIMEOUT:-30s}
+      AI_JSON_MODE: ${AI_JSON_MODE:-true}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       SEED_ENABLED: ${SEED_ENABLED:-false}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    # Permite apelarea unui Ollama rulat pe gazdă (http://host.docker.internal:11434/v1) și pe Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - internal
 

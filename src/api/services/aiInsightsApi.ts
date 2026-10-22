@@ -48,7 +48,7 @@ export const httpAiInsightsApi: AiInsightsApi = {
     const { data } = await http.post<AiInsightsWire>(
       "/ai/insights",
       request,
-      { timeout: 60_000 },
+      { timeout: 180_000 },
     );
     return toAiInsightsResponse(data);
   },

@@ -66,6 +66,26 @@ Dacă portul 27017 este deja ocupat (alt container MongoDB), oprește containeru
 | `npm test`           | rulează testele o singură dată                          |
 | `npm run test:watch` | teste în mod watch                                      |
 
+## AI local cu Ollama
+
+Backendul vorbește cu orice API compatibil OpenAI, inclusiv Ollama. Cheia/URL-ul AI rămân doar în backend.
+
+```bash
+ollama serve                  # dacă nu rulează deja (Windows: aplicația Ollama pornește singură)
+ollama pull llama3.1:8b       # o singură dată
+```
+
+În `backend/.env` (în loc de valorile OpenAI):
+
+```
+AI_BASE_URL=http://host.docker.internal:11434/v1   # backend în Docker
+AI_API_KEY=ollama                                  # orice valoare nevidă (Ollama o ignoră, backendul o cere)
+AI_MODEL=llama3.1:8b
+AI_READ_TIMEOUT=120s                               # modelele locale sunt mai lente
+```
+
+Dacă rulezi backendul cu `mvn spring-boot:run`, folosește `AI_BASE_URL=http://localhost:11434/v1` (în PowerShell: `$env:AI_BASE_URL=...`, la fel pentru celelalte). După modificarea `.env`: `docker compose up -d` (recreează backendul). Testat cu `llama3.1:8b`: răspuns în ~50 s la prima cerere (include încărcarea modelului). Timpul total maxim este limitat la ~170 s (timeout-ul din UI și din nginx). Modelele mici pot da recomandări mai puțin precise (ex. economii estimate 0).
+
 ## Variabile de mediu
 
 Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprascrieri locale copiază `.env.example` în `.env.local`:
