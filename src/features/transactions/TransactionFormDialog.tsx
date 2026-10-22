@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, getErrorMessage } from "../../api";
+import { useAiSettings } from "../../config/aiSettings";
 import type {
   Transaction,
   TransactionScan,
@@ -89,6 +90,7 @@ function TransactionForm({
   } = useCategories();
   const save = useSaveTransaction();
   const scan = useScanTransaction();
+  const aiMode = useAiSettings().mode;
   const fileInput = useRef<HTMLInputElement>(null);
   const [scanned, setScanned] = useState<TransactionScan | null>(null);
 
@@ -203,6 +205,13 @@ function TransactionForm({
                   ? "Se citește poza..."
                   : "Completează din poză sau PDF (bon, factură)"}
               </Button>
+              {scan.isPending && (
+                <Alert severity="info" data-testid="scan-ai-notice">
+                  Scanarea se face cu AI.
+                  {aiMode === "local" &&
+                    " Fiind folosit un model AI local, citirea poate dura mai mult."}
+                </Alert>
+              )}
               {scan.isError && (
                 <Alert severity="error">{getErrorMessage(scan.error)}</Alert>
               )}
