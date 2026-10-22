@@ -75,8 +75,9 @@ export async function suggestMissingCategories(
   ) => void,
   isCancelled: () => boolean,
   ai: TransactionImportAiApi = transactionImportAiApi,
+  batchSize?: number,
 ): Promise<string | null> {
-  const batches = categoryBatches(drafts);
+  const batches = categoryBatches(drafts, batchSize);
   const total = batches.reduce((sum, b) => sum + b.items.length, 0);
   let done = 0;
   for (const batch of batches) {

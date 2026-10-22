@@ -122,6 +122,27 @@ describe("TransactionsImportPage", () => {
     ).toBeDisabled();
   });
 
+  it("permite retrimiterea la AI a rândurilor fără categorie", async () => {
+    const user = userEvent.setup();
+    renderImport();
+    await user.upload(
+      screen.getByLabelText("Fișier de importat"),
+      new File(["Data;Descriere;Suma\n01.01.2030;Plata XYZ 987;-20"], "extras.csv", {
+        type: "text/csv",
+      }),
+    );
+    await screen.findByText("AI-ul nu a știut – alege categoria");
+
+    const improve = screen.getByRole("button", { name: "Îmbunătățește răspunsul" });
+    await waitFor(() => expect(improve).toBeEnabled());
+    await user.click(improve);
+
+    expect(
+      await screen.findByText("AI-ul nu a știut – alege categoria"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(improve).toBeEnabled());
+  });
+
   it("afișează o eroare clară pentru un fișier fără coloanele necesare", async () => {
     const user = userEvent.setup();
     renderImport();

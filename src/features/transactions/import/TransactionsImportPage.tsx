@@ -19,7 +19,7 @@ import {
   Typography,
   alpha,
 } from "@mui/material";
-import { ArrowLeft, FileSpreadsheet, Upload } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, Sparkles, Upload } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../../components/common/PageHeader";
@@ -41,6 +41,8 @@ import {
   suggestMissingCategories,
   type CategoryUpdate,
 } from "./importWorkflow";
+
+const RETRY_BATCH = 10;
 
 interface PreviewRow {
   draft: ImportDraft;
@@ -96,6 +98,40 @@ export function TransactionsImportPage() {
     [byId],
   );
 
+  const runSuggestions = async (
+    drafts: ImportDraft[],
+    id: number,
+    batchSize?: number,
+  ) => {
+    const pending = drafts.filter((d) => !d.categoryId).length;
+    if (pending === 0) return;
+    setCategoryError(null);
+    setProgress({ done: 0, total: pending });
+    const failure = await suggestMissingCategories(
+      drafts,
+      (updates, done, total) => {
+        applySuggestions(updates);
+        setProgress({ done, total });
+      },
+      () => id !== runId.current,
+      undefined,
+      batchSize,
+    );
+    if (id !== runId.current) return;
+    setProgress(null);
+    setCategoryError(failure);
+  };
+
+  // Trimite din nou la AI rândurile bifate fără categorie, în loturi mici ca modelul să se concentreze mai bine.
+  const improveAnswer = async () => {
+    const id = ++runId.current;
+    await runSuggestions(
+      selected.map((row) => row.draft).filter((draft) => !draft.categoryId),
+      id,
+      RETRY_BATCH,
+    );
+  };
+
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     const id = ++runId.current;
@@ -113,20 +149,7 @@ export function TransactionsImportPage() {
       setRows(loaded.drafts.map((draft) => ({ draft, included: true })));
       setPhase("idle");
 
-      const pending = loaded.drafts.filter((d) => !d.categoryId).length;
-      if (pending === 0) return;
-      setProgress({ done: 0, total: pending });
-      const failure = await suggestMissingCategories(
-        loaded.drafts,
-        (updates, done, total) => {
-          applySuggestions(updates);
-          setProgress({ done, total });
-        },
-        () => id !== runId.current,
-      );
-      if (id !== runId.current) return;
-      setProgress(null);
-      setCategoryError(failure);
+      await runSuggestions(loaded.drafts, id);
     } catch (e) {
       if (id !== runId.current) return;
       setRows(null);
@@ -198,6 +221,7 @@ export function TransactionsImportPage() {
   const aiPicked = selected.filter((r) => r.draft.aiState === "suggested").length;
   const aiUnsure = selected.filter((r) => r.draft.aiState === "unsure").length;
   const categorizing = progress !== null;
+  const pendingCategories = selected.filter((r) => !r.draft.categoryId).length;
 
   const canSave =
     selected.length > 0 &&
@@ -278,6 +302,16 @@ export function TransactionsImportPage() {
                   variant="outlined"
                   label={`${invalidSelected.length} rânduri de corectat`}
                 />
+              )}
+              {pendingCategories > 0 && (
+                <Button
+                  variant="outlined"
+                  startIcon={<Sparkles size={18} />}
+                  disabled={categorizing || importMutation.isPending}
+                  onClick={() => void improveAnswer()}
+                >
+                  Îmbunătățește răspunsul
+                </Button>
               )}
               <Button onClick={() => fileInput.current?.click()}>
                 Alege alt fișier
