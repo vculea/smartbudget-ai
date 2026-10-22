@@ -319,11 +319,11 @@ export function TransactionsImportPage() {
               stickyHeader
               size="small"
               aria-label="Previzualizare import"
-              sx={{ minWidth: 960, tableLayout: "fixed" }}
+              sx={{ minWidth: 1040, tableLayout: "fixed" }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 48 }}>
+                  <TableCell padding="checkbox" sx={checkboxCellSx}>
                     <Checkbox
                       checked={allSelected}
                       indeterminate={selected.length > 0 && !allSelected}
@@ -338,10 +338,10 @@ export function TransactionsImportPage() {
                       }}
                     />
                   </TableCell>
-                  <TableCell sx={{ width: 56 }}>Rând</TableCell>
+                  <TableCell sx={{ width: 72 }}>Rând</TableCell>
                   <TableCell sx={{ width: 200 }}>Data</TableCell>
                   <TableCell>Descriere</TableCell>
-                  <TableCell sx={{ width: 150 }}>Tip</TableCell>
+                  <TableCell sx={{ width: 190 }}>Tip</TableCell>
                   <TableCell sx={{ width: 190 }}>Categorie</TableCell>
                   <TableCell align="right" sx={{ width: 125 }}>
                     Sumă
@@ -456,6 +456,9 @@ function UploadCard({
   );
 }
 
+// "&&" outranks MUI's small-table checkbox rule that forces width: 24
+const checkboxCellSx = { "&&": { width: 64, pl: 1, pr: 1 } };
+
 interface PreviewTableRowProps {
   draft: ImportDraft;
   included: boolean;
@@ -490,7 +493,7 @@ const PreviewTableRow = memo(function PreviewTableRow({
       }}
       data-invalid={hasErrors || undefined}
     >
-      <TableCell padding="checkbox">
+      <TableCell padding="checkbox" sx={checkboxCellSx}>
         <Checkbox
           checked={included}
           onChange={(_, checked) => onToggle(draft.key, checked)}
