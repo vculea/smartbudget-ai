@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   LayoutDashboard,
+  Settings,
   Sparkles,
   Target,
   Wallet,
@@ -19,4 +20,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/budgets", label: "Bugete", icon: Wallet },
   { to: "/goals", label: "Obiective", icon: Target },
   { to: "/ai-insights", label: "AI Coach", icon: Sparkles },
+  { to: "/settings/ai", label: "Setări AI", icon: Settings },
 ];

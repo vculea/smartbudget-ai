@@ -26,6 +26,11 @@ const AiInsightsPage = lazy(() =>
     default: m.AiInsightsPage,
   })),
 );
+const AiSettingsPage = lazy(() =>
+  import("../features/settings/AiSettingsPage").then((m) => ({
+    default: m.AiSettingsPage,
+  })),
+);
 
 export function AppRoutes() {
   return (
@@ -37,6 +42,7 @@ export function AppRoutes() {
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/ai-insights" element={<AiInsightsPage />} />
+        <Route path="/settings/ai" element={<AiSettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

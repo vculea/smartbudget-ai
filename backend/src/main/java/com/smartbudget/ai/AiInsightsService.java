@@ -30,12 +30,17 @@ public class AiInsightsService {
     }
 
     private AiInsightsResponse analyze(DashboardResponse dashboard) {
+        AiAnalysis analysis = analysisService.analyze(requireSummary(dashboard));
+        return new AiInsightsResponse(dashboard.month(), analysis.summary(), analysis.insights(), clock.instant());
+    }
+
+    /** Summary sent to the model; refuses periods without any income or expense. */
+    static FinancialSummary requireSummary(DashboardResponse dashboard) {
         FinancialSummary summary = toSummary(dashboard);
         if (summary.totalIncome().signum() == 0 && summary.totalExpenses().signum() == 0) {
             throw ApiException.unprocessable("Nu există tranzacții în perioada selectată pentru a genera recomandări.");
         }
-        AiAnalysis analysis = analysisService.analyze(summary);
-        return new AiInsightsResponse(dashboard.month(), analysis.summary(), analysis.insights(), clock.instant());
+        return summary;
     }
 
     static FinancialSummary toSummary(DashboardResponse dashboard) {

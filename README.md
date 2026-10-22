@@ -98,6 +98,16 @@ AI_VISION_MODEL=gemma4:26b    # sau llava, llama3.2-vision, qwen2.5vl (ollama pu
 
 Fără `AI_VISION_MODEL` se folosește `AI_MODEL`. Citirea locală durează de obicei zeci de secunde (primul apel încarcă modelul); folosește `AI_READ_TIMEOUT=120s`. În modul demo, scanarea întoarce o tranzacție de exemplu.
 
+## Model AI ales din interfață (Setări AI)
+
+În pagina **Setări AI** (meniul din stânga) alegi unde rulează AI-ul, separat pentru fiecare browser (setările se păstrează în `localStorage`):
+
+- **Serverul aplicației** – implicit; backendul apelează modelul configurat în `backend/.env` (ex. OpenAI), iar cheia serverului nu ajunge în browser.
+- **Cheia mea API (furnizor cu plată)** – îți folosești propriul cont la OpenAI, Groq, Google Gemini sau alt furnizor compatibil OpenAI (alegi furnizorul, introduci cheia și, opțional, modelele). Browserul apelează direct furnizorul; cheia se păstrează doar în `localStorage`-ul acestui browser și nu este trimisă backendului. Adresele HTTP (necriptate) sunt refuzate pentru cheie, cu excepția localhost.
+- **Model local pe calculatorul meu (gratuit)** – browserul apelează direct Ollama (sau alt server OpenAI-compatibil) de pe calculatorul tău. Funcționează și când aplicația rulează în cloud, pentru că cererea pornește din browser, nu din server; modelul trebuie să ruleze pe același calculator cu browserul.
+
+Cu modelul local sau cu cheia proprie, backendul rămâne sursa de adevăr: construiește promptul din cifrele din MongoDB (`POST /ai/local/insights/prompt`, `GET /ai/local/receipt/prompt`) și validează răspunsul modelului (`POST /ai/local/insights/result`, `POST /ai/local/receipt/result`), exact ca pentru modelul din server. Furnizorul primește doar cifre agregate (recomandări) sau poza bonului (citire bon). Furnizorul trebuie să permită apeluri din browser (CORS); OpenAI, Groq și Gemini o permit. Pentru Ollama, pornește-l cu `OLLAMA_ORIGINS` setat la adresa site-ului (Setări AI o afișează) și apasă **Testează conexiunea**. Chrome/Edge permit apeluri de la o pagină HTTPS către `http://localhost` (Chrome poate cere permisiunea pentru rețeaua locală); Safari le blochează.
+
 ## Variabile de mediu
 
 Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprascrieri locale copiază `.env.example` în `.env.local`:

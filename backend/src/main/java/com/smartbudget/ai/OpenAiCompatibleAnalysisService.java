@@ -67,7 +67,7 @@ public class OpenAiCompatibleAnalysisService implements AiAnalysisService {
         body.put("model", properties.model());
         body.put("messages", List.of(
                 Map.of("role", "system", "content", SYSTEM_PROMPT),
-                Map.of("role", "user", "content", "Financial summary (JSON):\n" + toJson(summary))));
+                Map.of("role", "user", "content", userMessage(objectMapper, summary))));
         if (properties.temperature() != null) {
             body.put("temperature", properties.temperature());
         }
@@ -95,9 +95,10 @@ public class OpenAiCompatibleAnalysisService implements AiAnalysisService {
         return content;
     }
 
-    private String toJson(FinancialSummary summary) {
+    /** The user message sent to the model; shared with the browser-side (local AI) flow. */
+    static String userMessage(ObjectMapper objectMapper, FinancialSummary summary) {
         try {
-            return objectMapper.writeValueAsString(summary);
+            return "Financial summary (JSON):\n" + objectMapper.writeValueAsString(summary);
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot serialize financial summary", ex);
         }

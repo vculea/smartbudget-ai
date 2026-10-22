@@ -33,6 +33,9 @@ public class OpenAiCompatibleReceiptScanner implements ReceiptScanner {
 
     static final int MAX_DESCRIPTION = 200;
 
+    /** User text accompanying the image; shared with the browser-side (local AI) flow. */
+    static final String USER_TEXT = "Extract the transaction from this image.";
+
     static final String SYSTEM_PROMPT = """
             You read photos of receipts, invoices and payment confirmations for a personal budgeting app.
             Rules:
@@ -80,9 +83,9 @@ public class OpenAiCompatibleReceiptScanner implements ReceiptScanner {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", properties.visionModel());
         body.put("messages", List.of(
-                Map.of("role", "system", "content", SYSTEM_PROMPT.formatted(today, categoriesJson(categories))),
+                Map.of("role", "system", "content", systemPrompt(objectMapper, categories, today)),
                 Map.of("role", "user", "content", List.of(
-                        Map.of("type", "text", "text", "Extract the transaction from this image."),
+                        Map.of("type", "text", "text", USER_TEXT),
                         Map.of("type", "image_url", "image_url", Map.of("url", dataUrl))))));
         if (properties.temperature() != null) {
             body.put("temperature", properties.temperature());
@@ -111,19 +114,25 @@ public class OpenAiCompatibleReceiptScanner implements ReceiptScanner {
         return content;
     }
 
-    private String categoriesJson(List<CategoryResponse> categories) {
+    /** The system prompt sent to the model; shared with the browser-side (local AI) flow. */
+    static String systemPrompt(ObjectMapper objectMapper, List<CategoryResponse> categories, LocalDate today) {
         List<Map<String, String>> items = categories.stream()
                 .map(c -> Map.of("id", c.id(), "name", c.name(), "type", c.type().name()))
                 .toList();
         try {
-            return objectMapper.writeValueAsString(items);
+            return SYSTEM_PROMPT.formatted(today, objectMapper.writeValueAsString(items));
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot serialize categories", ex);
         }
     }
 
-    /** Validates the model's answer; unreadable fields become null / today instead of failing the whole scan. */
     ReceiptScan parse(String content, List<CategoryResponse> categories, LocalDate today) {
+        return parse(objectMapper, content, categories, today);
+    }
+
+    /** Validates the model's answer; unreadable fields become null / today instead of failing the whole scan. */
+    static ReceiptScan parse(ObjectMapper objectMapper, String content, List<CategoryResponse> categories,
+            LocalDate today) {
         JsonNode root;
         try {
             root = objectMapper.readTree(AiResponseParser.stripCodeFence(content));

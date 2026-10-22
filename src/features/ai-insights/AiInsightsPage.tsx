@@ -4,14 +4,17 @@ import {
   Button,
   Card,
   CardContent,
+  Link,
   Stack,
   Typography,
 } from "@mui/material";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import { useSelectedPeriod } from "../../app/PeriodContext";
 import { palette } from "../../app/theme";
 import { getErrorMessage } from "../../api";
+import { useAiSettings } from "../../config/aiSettings";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingBlock } from "../../components/common/LoadingBlock";
 import { PeriodSelector } from "../../components/common/PeriodSelector";
@@ -46,6 +49,7 @@ function toGoalDraft(recommendation: AiRecommendation): GoalFormInitialValues {
 export function AiInsightsPage() {
   const { period } = useSelectedPeriod();
   const analysis = useAiAnalysis();
+  const aiSettings = useAiSettings();
   const [draft, setDraft] = useState<{
     id: string;
     values: GoalFormInitialValues;
@@ -101,8 +105,14 @@ export function AiInsightsPage() {
                 Descoperă unde poți economisi
               </Typography>
               <Typography sx={{ opacity: 0.9 }}>
-                Analiza este realizată de serverul aplicației; datele tale nu
-                sunt procesate în browser.
+                {aiSettings.mode === "local"
+                  ? "Analiza rulează cu modelul tău local (Ollama); modelului îi sunt trimise doar cifre agregate."
+                  : aiSettings.mode === "own-key"
+                    ? "Analiza rulează la furnizorul AI ales, cu cheia ta; acestuia îi sunt trimise doar cifre agregate."
+                    : "Analiza este realizată de serverul aplicației, pe baza unui rezumat agregat al datelor tale."}{" "}
+                <Link component={RouterLink} to="/settings/ai" color="inherit">
+                  Schimbă în Setări AI
+                </Link>
               </Typography>
             </Box>
             <Button

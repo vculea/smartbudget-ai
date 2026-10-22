@@ -24,6 +24,7 @@ import type {
   TransactionType,
 } from "../../types";
 import { todayIso } from "../../utils/date";
+import { RECEIPT_FILE_ACCEPT } from "../../utils/image";
 import {
   amountField,
   isoDateField,
@@ -184,8 +185,7 @@ function TransactionForm({
               <input
                 ref={fileInput}
                 type="file"
-                accept="image/*"
-                capture="environment"
+                accept={RECEIPT_FILE_ACCEPT}
                 hidden
                 data-testid="receipt-input"
                 onChange={(event) => {
@@ -201,7 +201,7 @@ function TransactionForm({
               >
                 {scan.isPending
                   ? "Se citește poza..."
-                  : "Completează din poză (bon, factură)"}
+                  : "Completează din poză sau PDF (bon, factură)"}
               </Button>
               {scan.isError && (
                 <Alert severity="error">{getErrorMessage(scan.error)}</Alert>
