@@ -17,45 +17,64 @@ cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-* Aplicația: <http://localhost:8081> (UI-ul apelează `/api/v1`, proxy nginx către backend; același origin, fără CORS)
-* API / Swagger: <http://localhost:8080/api/v1> · <http://localhost:8080/swagger-ui.html>
-* Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) le încarcă idempotent în MongoDB.
-* Oprire păstrând datele: `docker compose down`; ștergerea datelor: `docker compose down -v`.
+Comenzile `docker compose` se rulează din `backend/`, nu din rădăcina repository-ului.
+
+- Aplicația: <http://localhost:8081> (UI-ul apelează `/api/v1`, proxy nginx către backend; același origin, fără CORS)
+- API / Swagger: <http://localhost:8080/api/v1> · <http://localhost:8080/swagger-ui.html>
+- Date demonstrative: `SEED_ENABLED=true` (implicit în `.env.example`) le încarcă idempotent în MongoDB.
+- Oprire păstrând datele: `docker compose down`; ștergerea datelor: `docker compose down -v`.
 
 ## Dezvoltare locală (Vite + Maven + MongoDB în Docker)
 
+Toate comenzile `docker compose` se rulează din folderul `backend/` (acolo sunt fișierele compose și `.env`).
+
 ```bash
-# 1) MongoDB (publicat doar pe 127.0.0.1:27017)
+# 1) MongoDB (publicat doar pe 127.0.0.1:27017, cu autentificare)
 cd backend
+cp .env.example .env          # o singură dată; setează MONGO_PASSWORD în .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d mongo
-# 2) Backend (JDK 21, profil dev = date demo + loguri debug)
+
+# 2) Backend (JDK 21, profil dev = date demo + loguri debug); URI-ul conține parola din .env
+export MONGODB_URI="mongodb://smartbudget:PAROLA_DIN_ENV@localhost:27017/smartbudget?authSource=admin"
+export AI_API_KEY="cheia-ta"  # opțional, doar pentru recomandările AI
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
 # 3) Frontend, în alt terminal, din rădăcina repository-ului
 npm install
-npm run dev            # http://localhost:5173, folosește API-ul real
+npm run dev                   # http://localhost:5173, folosește API-ul real
 ```
+
+În PowerShell, variabilele se setează cu `$env:MONGODB_URI="..."` și `$env:AI_API_KEY="..."`.
+
+# Mai simplu, dacă nu vrei să editezi nimic: rulează totul în Docker, cu un singur set de comenzi.
+
+cd backend
+cp .env.example .env
+docker compose up -d --build
+
+Dacă portul 27017 este deja ocupat (alt container MongoDB), oprește containerul respectiv sau schimbă în `backend/docker-compose.dev.yml` portul din stânga (ex. `127.0.0.1:27018:27017`) și folosește același port în `MONGODB_URI`.
 
 `npm run dev:demo` pornește frontendul în **mod demo** (mock local, fără backend). Modul este ales explicit la build/pornire; nu există trecere automată între mock și API real, iar un backend indisponibil produce erori vizibile în interfață (cu buton „Reîncearcă”).
 
-| Comandă              | Descriere                                             |
-| -------------------- | ----------------------------------------------------- |
-| `npm run dev`        | server de dezvoltare, API real                        |
+| Comandă              | Descriere                                               |
+| -------------------- | ------------------------------------------------------- |
+| `npm run dev`        | server de dezvoltare, API real                          |
 | `npm run dev:demo`   | server de dezvoltare, mod demo (mock în `localStorage`) |
-| `npm run build`      | verificare TypeScript + build de producție în `dist/` |
-| `npm run preview`    | servește build-ul local                               |
-| `npm run typecheck`  | doar verificarea tipurilor                            |
-| `npm test`           | rulează testele o singură dată                        |
-| `npm run test:watch` | teste în mod watch                                    |
+| `npm run build`      | verificare TypeScript + build de producție în `dist/`   |
+| `npm run preview`    | servește build-ul local                                 |
+| `npm run typecheck`  | doar verificarea tipurilor                              |
+| `npm test`           | rulează testele o singură dată                          |
+| `npm run test:watch` | teste în mod watch                                      |
 
 ## Variabile de mediu
 
 Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprascrieri locale copiază `.env.example` în `.env.local`:
 
-| Variabilă              | Implicit                               | Rol                                                 |
-| ---------------------- | -------------------------------------- | --------------------------------------------------- |
-| `VITE_API_BASE_URL`    | `http://localhost:8080/api/v1` (`/api/v1` în imaginea Docker) | URL-ul API-ului Spring Boot |
-| `VITE_DEMO_MODE`       | `false` (`true` doar în `.env.demo`)   | `true` = mock API local; `false` = doar API-ul real |
-| `VITE_MOCK_LATENCY_MS` | `400`                                  | latență simulată în modul demo                      |
+| Variabilă              | Implicit                                                      | Rol                                                 |
+| ---------------------- | ------------------------------------------------------------- | --------------------------------------------------- |
+| `VITE_API_BASE_URL`    | `http://localhost:8080/api/v1` (`/api/v1` în imaginea Docker) | URL-ul API-ului Spring Boot                         |
+| `VITE_DEMO_MODE`       | `false` (`true` doar în `.env.demo`)                          | `true` = mock API local; `false` = doar API-ul real |
+| `VITE_MOCK_LATENCY_MS` | `400`                                                         | latență simulată în modul demo                      |
 
 Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SWAGGER_ENABLED`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`. Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
 
