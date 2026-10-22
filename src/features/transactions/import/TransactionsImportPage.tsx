@@ -339,11 +339,11 @@ export function TransactionsImportPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ width: 56 }}>Rând</TableCell>
-                  <TableCell sx={{ width: 160 }}>Data</TableCell>
+                  <TableCell sx={{ width: 200 }}>Data</TableCell>
                   <TableCell>Descriere</TableCell>
-                  <TableCell sx={{ width: 125 }}>Tip</TableCell>
+                  <TableCell sx={{ width: 150 }}>Tip</TableCell>
                   <TableCell sx={{ width: 190 }}>Categorie</TableCell>
-                  <TableCell align="right" sx={{ width: 100 }}>
+                  <TableCell align="right" sx={{ width: 125 }}>
                     Sumă
                   </TableCell>
                 </TableRow>

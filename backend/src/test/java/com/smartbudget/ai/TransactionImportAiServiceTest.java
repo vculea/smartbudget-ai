@@ -112,7 +112,7 @@ class TransactionImportAiServiceTest {
     void categoriesPromptListsCategoriesAndTransactions() {
         ImportAiPrompt prompt = service.categoriesPrompt(List.of(new ImportItem(7, "MEGA IMAGE", TransactionType.EXPENSE)));
 
-        assertThat(prompt.systemPrompt()).contains("\"id\":\"food\"").contains("Do NOT guess");
+        assertThat(prompt.systemPrompt()).contains("\"id\":\"food\"").contains("Use null ONLY when");
         assertThat(prompt.userMessage()).contains("\"index\":7").contains("MEGA IMAGE").contains("EXPENSE");
     }
 }

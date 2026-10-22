@@ -328,12 +328,38 @@ export function detectColumnsByHeader(
   return null;
 }
 
-/** Păstrează din descriere doar textul de dinaintea primei apariții a separatorului ales de AI. */
+const squeeze = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/**
+ * Păstrează din descriere doar textul de dinaintea primei apariții a separatorului (ales de AI sau dedus)
+ * și curăță spațiile multiple.
+ */
 export function cutDescription(text: string, cutAt?: string | null): string {
-  if (!cutAt) return text;
-  const index = text.indexOf(cutAt);
-  const kept = index > 0 ? text.slice(0, index).trim() : text;
-  return kept || text;
+  const clean = squeeze(text);
+  if (!cutAt) return clean;
+  const index = clean.indexOf(cutAt.trim() || cutAt);
+  const kept = index > 0 ? clean.slice(0, index).trim() : clean;
+  return kept || clean;
+}
+
+/**
+ * Extrasele bancare scriu des „COMERCIANT, ORAȘ, JUDEȚ". Dacă AI-ul nu a indicat separatorul, dar aproape
+ * toate descrierile au virgulă după un nume, tăiem la prima virgulă ca să rămână doar comerciantul.
+ */
+export function inferDescriptionCut(
+  rows: Cell[][],
+  mapping: ImportColumnMapping,
+): string | null {
+  const column = mapping.description;
+  if (column == null) return null;
+  const texts = rows
+    .slice(Math.max(0, mapping.headerRow))
+    .map((row) => cellText(row[column]))
+    .filter((text) => text !== "")
+    .slice(0, 50);
+  if (texts.length < 3) return null;
+  const withComma = texts.filter((text) => text.indexOf(",") > 2).length;
+  return withComma * 10 >= texts.length * 7 ? "," : null;
 }
 
 /**
@@ -422,6 +448,7 @@ export function buildDrafts(
     const index = mapping[field];
     return index == null ? undefined : cells[index];
   };
+  const cutAt = mapping.descriptionCutAt || inferDescriptionCut(rows, mapping);
 
   // Fără coloană de tip, semnul sumei decide; dacă nu există sume negative, totul e cheltuială.
   const hasNegative = dataRows.some(({ cells }) => {
@@ -468,7 +495,7 @@ export function buildDrafts(
       amount: signed === null ? "" : formatAmountInput(signed),
       description: cutDescription(
         cellText(cell(cells, "description")),
-        mapping.descriptionCutAt,
+        cutAt,
       ).slice(0, DESCRIPTION_MAX),
       transactionDate: parseLooseDate(
         cell(cells, "date"),
