@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import com.smartbudget.ai.ReceiptScan;
 import com.smartbudget.common.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -16,8 +18,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/transactions")
@@ -25,9 +29,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class TransactionController {
 
     private final TransactionService service;
+    private final TransactionScanService scanService;
 
-    public TransactionController(TransactionService service) {
+    public TransactionController(TransactionService service, TransactionScanService scanService) {
         this.service = service;
+        this.scanService = scanService;
+    }
+
+    @PostMapping(value = "/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Propose a transaction from a receipt photo",
+            description = "Multipart field 'image' (JPEG, PNG or WebP, max 8 MB). The AI reads the amount, date, description and "
+                    + "picks one of the existing categories. Nothing is saved: the client reviews the values and then calls POST /transactions. "
+                    + "amount and categoryId may be null when unreadable. Errors: 413 too large, 415 not an image, "
+                    + "422 nothing recognized, 429/502/503/504 AI provider problems.")
+    public ReceiptScan scan(@RequestPart("image") MultipartFile image) {
+        return scanService.scan(image);
     }
 
     @GetMapping

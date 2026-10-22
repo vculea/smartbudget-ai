@@ -1,6 +1,6 @@
 import type { TransactionsApi } from "../contracts";
 import { http } from "../http";
-import type { Page, Transaction } from "../../types";
+import type { Page, Transaction, TransactionScan } from "../../types";
 
 export const httpTransactionsApi: TransactionsApi = {
   async list(query) {
@@ -24,5 +24,16 @@ export const httpTransactionsApi: TransactionsApi = {
   },
   async remove(id) {
     await http.delete(`/transactions/${id}`);
+  },
+  // Citirea pozei de către modelul AI local poate dura (la fel ca analiza AI).
+  async scan(image) {
+    const body = new FormData();
+    body.append("image", image, "bon.jpg");
+    const { data } = await http.post<TransactionScan>(
+      "/transactions/scan",
+      body,
+      { timeout: 180_000, headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
   },
 };

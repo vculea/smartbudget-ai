@@ -88,6 +88,7 @@ unavailable). No test calls a real AI provider: the AI interface is mocked, and 
 | `MONGODB_URI` | `mongodb://localhost:27017/smartbudget` | MongoDB connection string |
 | `AI_API_KEY` | – (required for AI) | provider key; never logged or returned |
 | `AI_MODEL` | `gpt-4o-mini` | model name |
+| `AI_VISION_MODEL` | same as `AI_MODEL` | model with image input used by `POST /transactions/scan` (e.g. `gpt-4o-mini`, local `gemma4:26b`, `llava`) |
 | `AI_BASE_URL` | `https://api.openai.com/v1` | any OpenAI-compatible base URL |
 | `AI_CONNECT_TIMEOUT` / `AI_READ_TIMEOUT` | `5s` / `30s` | provider timeouts |
 | `AI_JSON_MODE` | `true` | send `response_format: json_object` (set `false` if the provider rejects it) |
@@ -119,6 +120,7 @@ Interactive documentation: Swagger UI. Summary:
 | GET | `/transactions/{id}` | 404 if missing |
 | POST / PUT | `/transactions`, `/transactions/{id}` | 201 / 200; category must exist and match the transaction type (422 otherwise) |
 | DELETE | `/transactions/{id}` | 204 |
+| POST | `/transactions/scan` | multipart field `image` (JPEG/PNG/WebP, ≤ 8 MB, type checked from the file signature). The vision model reads amount, date, description and picks an existing category; returns `{ type, amount, description, transactionDate, categoryId }` (`amount`/`categoryId` may be `null`) **without saving**; the client reviews it and calls `POST /transactions`. 413 / 415 / 422 (nothing recognized) / 429 / 502 / 503 / 504 |
 | GET | `/categories` | |
 | GET | `/budgets?month=YYYY-MM` | |
 | POST | `/budgets` | 201; 409 if the category already has a budget for that month; expense categories only |

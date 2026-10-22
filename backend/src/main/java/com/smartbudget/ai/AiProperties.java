@@ -17,11 +17,14 @@ public record AiProperties(
         /** Optional; some models only accept their default temperature. */
         Double temperature,
         /** Sends response_format=json_object (supported by most compatible providers). */
-        Boolean jsonMode) {
+        Boolean jsonMode,
+        /** Model with image input used to read receipts; defaults to {@code model}. */
+        String visionModel) {
 
     public AiProperties {
         baseUrl = baseUrl == null || baseUrl.isBlank() ? "https://api.openai.com/v1" : baseUrl.strip();
         model = model == null || model.isBlank() ? "gpt-4o-mini" : model.strip();
+        visionModel = visionModel == null || visionModel.isBlank() ? model : visionModel.strip();
         connectTimeout = connectTimeout == null ? Duration.ofSeconds(5) : connectTimeout;
         readTimeout = readTimeout == null ? Duration.ofSeconds(30) : readTimeout;
         jsonMode = jsonMode == null || jsonMode;

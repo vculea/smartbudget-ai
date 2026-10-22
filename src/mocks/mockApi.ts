@@ -259,6 +259,22 @@ export const mockTransactionsApi: TransactionsApi = {
     db.transactions = db.transactions.filter((t) => t.id !== id);
     saveDb(db);
   },
+
+  // Mock: nu citește imaginea; propune o cheltuială de exemplu ca să poată fi testat fluxul.
+  async scan() {
+    await delay(3);
+    const db = loadDb();
+    const category =
+      db.categories.find((c) => c.id === CATEGORY.groceries) ??
+      db.categories.find((c) => c.type === "EXPENSE");
+    return {
+      type: "EXPENSE",
+      amount: 87.5,
+      description: "Bon exemplu (mod demo) - cumpărături",
+      transactionDate: todayIso(),
+      categoryId: category?.id ?? null,
+    };
+  },
 };
 
 export const mockCategoriesApi: CategoriesApi = {

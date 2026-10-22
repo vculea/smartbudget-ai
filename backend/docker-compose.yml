@@ -28,6 +28,7 @@ services:
       MONGODB_URI: mongodb://${MONGO_USER:-smartbudget}:${MONGO_PASSWORD}@mongo:27017/smartbudget?authSource=admin
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_VISION_MODEL: ${AI_VISION_MODEL:-}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
       AI_READ_TIMEOUT: ${AI_READ_TIMEOUT:-30s}
       AI_JSON_MODE: ${AI_JSON_MODE:-true}

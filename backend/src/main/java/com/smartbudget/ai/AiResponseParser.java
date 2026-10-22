@@ -73,7 +73,7 @@ public class AiResponseParser {
         return new AiAnalysis.Insight(item.title().strip(), item.reason().strip(), Money.scale(saving), priority);
     }
 
-    private static String stripCodeFence(String content) {
+    static String stripCodeFence(String content) {
         String text = content == null ? "" : content.strip();
         if (text.startsWith("```")) {
             int firstNewline = text.indexOf('\n');

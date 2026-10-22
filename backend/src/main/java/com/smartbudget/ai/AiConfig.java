@@ -21,4 +21,9 @@ public class AiConfig {
     public AiAnalysisService aiAnalysisService(RestClient aiRestClient, AiProperties properties, ObjectMapper mapper) {
         return new OpenAiCompatibleAnalysisService(aiRestClient, properties, mapper);
     }
+
+    @Bean
+    public ReceiptScanner receiptScanner(RestClient aiRestClient, AiProperties properties, ObjectMapper mapper) {
+        return new OpenAiCompatibleReceiptScanner(aiRestClient, properties, mapper);
+    }
 }

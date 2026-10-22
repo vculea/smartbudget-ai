@@ -3,18 +3,13 @@ package com.smartbudget.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartbudget.common.ApiException;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -88,16 +83,8 @@ public class OpenAiCompatibleAnalysisService implements AiAnalysisService {
                     .body(body)
                     .retrieve()
                     .body(JsonNode.class);
-        } catch (HttpStatusCodeException ex) {
-            throw mapStatus(ex.getStatusCode());
-        } catch (ResourceAccessException ex) {
-            throw mapIoFailure(ex);
         } catch (RestClientException ex) {
-            if (isTimeout(ex)) {
-                throw mapIoFailure(ex);
-            }
-            log.warn("AI provider returned an unreadable response: {}", ex.getClass().getSimpleName());
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "Răspunsul furnizorului AI nu a putut fi citit. Încearcă din nou.");
+            throw AiProviderErrors.map(ex);
         }
 
         String content = response == null ? "" : response.path("choices").path(0).path("message").path("content").asText("");
@@ -113,39 +100,5 @@ public class OpenAiCompatibleAnalysisService implements AiAnalysisService {
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot serialize financial summary", ex);
         }
-    }
-
-    private ApiException mapStatus(HttpStatusCode status) {
-        log.warn("AI provider answered with HTTP {}", status.value());
-        if (status.value() == 429) {
-            return new ApiException(HttpStatus.TOO_MANY_REQUESTS,
-                    "Limita de cereri a furnizorului AI a fost atinsă. Încearcă din nou peste câteva momente.");
-        }
-        if (status.value() == 401 || status.value() == 403) {
-            return new ApiException(HttpStatus.BAD_GATEWAY,
-                    "Furnizorul AI a refuzat autentificarea. Verifică configurarea cheii API.");
-        }
-        if (status.is5xxServerError()) {
-            return new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Furnizorul AI este temporar indisponibil. Încearcă din nou.");
-        }
-        return new ApiException(HttpStatus.BAD_GATEWAY, "Cererea către furnizorul AI a eșuat. Încearcă din nou.");
-    }
-
-    private ApiException mapIoFailure(RestClientException ex) {
-        boolean timeout = isTimeout(ex);
-        log.warn("AI provider call failed: {}", timeout ? "timeout" : "connection error");
-        return timeout
-                ? new ApiException(HttpStatus.GATEWAY_TIMEOUT, "Furnizorul AI nu a răspuns la timp. Încearcă din nou.")
-                : new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Furnizorul AI nu poate fi contactat. Încearcă din nou.");
-    }
-
-    private static boolean isTimeout(Throwable ex) {
-        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException) {
-                return true;
-            }
-        }
-        return false;
     }
 }

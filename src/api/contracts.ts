@@ -12,6 +12,7 @@ import type {
   Transaction,
   TransactionInput,
   TransactionQuery,
+  TransactionScan,
   YearMonth,
 } from "../types";
 
@@ -25,6 +26,8 @@ export interface TransactionsApi {
   create(input: TransactionInput): Promise<Transaction>;
   update(id: string, input: TransactionInput): Promise<Transaction>;
   remove(id: string): Promise<void>;
+  /** Trimite poza unui bon către AI și întoarce tranzacția propusă (nesalvată). */
+  scan(image: Blob): Promise<TransactionScan>;
 }
 
 export interface CategoriesApi {

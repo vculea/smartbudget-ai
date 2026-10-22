@@ -7,6 +7,7 @@ import {
 import { getErrorMessage, queryKeys, transactionsApi } from "../../api";
 import { useToast } from "../../app/useToast";
 import type { TransactionInput, TransactionQuery } from "../../types";
+import { prepareImageForUpload } from "../../utils/image";
 
 export function useTransactionsQuery(query: TransactionQuery) {
   return useQuery({
@@ -45,6 +46,14 @@ export function useSaveTransaction() {
     },
     onError: (error) =>
       toast.error(getErrorMessage(error, "Tranzacția nu a putut fi salvată.")),
+  });
+}
+
+/** Citește poza unui bon cu AI; nu salvează nimic, doar propune valorile formularului. */
+export function useScanTransaction() {
+  return useMutation({
+    mutationFn: async (image: Blob) =>
+      transactionsApi.scan(await prepareImageForUpload(image)),
   });
 }
 

@@ -26,6 +26,18 @@ export interface TransactionInput {
 
 export type TransactionSortField = "transactionDate" | "amount";
 
+/**
+ * Câmpurile propuse de `POST /transactions/scan` dintr-o poză. Sunt doar sugestii:
+ * `amount` și `categoryId` pot lipsi când AI-ul nu le-a putut citi.
+ */
+export interface TransactionScan {
+  type: TransactionType;
+  amount: number | null;
+  description: string;
+  transactionDate: IsoDate;
+  categoryId: string | null;
+}
+
 /** Parametrii pentru `GET /transactions`. `page` începe de la 0. */
 export interface TransactionQuery {
   page: number;

@@ -86,6 +86,18 @@ AI_READ_TIMEOUT=120s                               # modelele locale sunt mai le
 
 Dacă rulezi backendul cu `mvn spring-boot:run`, folosește `AI_BASE_URL=http://localhost:11434/v1` (în PowerShell: `$env:AI_BASE_URL=...`, la fel pentru celelalte). După modificarea `.env`: `docker compose up -d` (recreează backendul). Testat cu `llama3.1:8b`: răspuns în ~50 s la prima cerere (include încărcarea modelului). Timpul total maxim este limitat la ~170 s (timeout-ul din UI și din nginx). Modelele mici pot da recomandări mai puțin precise (ex. economii estimate 0).
 
+### Tranzacție din poză (bon, factură)
+
+În dialogul „Tranzacție nouă”, butonul **Completează din poză** (pe telefon deschide camera) trimite poza la `POST /transactions/scan`. Un model cu viziune citește suma, data, descrierea și alege o categorie existentă; formularul se completează, tu verifici/modifici și apeși **Adaugă tranzacția** (nimic nu se salvează automat). Poza este redusă în browser (max. 1600 px) și nu este stocată.
+
+Modelul de text `llama3.1:8b` nu poate citi imagini; setează un model cu viziune în `backend/.env`:
+
+```
+AI_VISION_MODEL=gemma4:26b    # sau llava, llama3.2-vision, qwen2.5vl (ollama pull ...)
+```
+
+Fără `AI_VISION_MODEL` se folosește `AI_MODEL`. Citirea locală durează de obicei zeci de secunde (primul apel încarcă modelul); folosește `AI_READ_TIMEOUT=120s`. În modul demo, scanarea întoarce o tranzacție de exemplu.
+
 ## Variabile de mediu
 
 Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprascrieri locale copiază `.env.example` în `.env.local`:
@@ -122,7 +134,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `PUT|DELETE /transactions/{id}`, `GET /categories`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 `GET /transactions` primește: `page` (de la 0), `size`, `type`, `categoryId`, `startDate`, `endDate`, `search`, `sort` (ex. `transactionDate,desc`) și returnează `{ content, page, size, totalElements, totalPages }`. Toate tipurile sunt în `src/types/`.
 

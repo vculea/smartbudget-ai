@@ -149,7 +149,7 @@ class OpenAiCompatibleAnalysisServiceTest {
         slow.start();
         try {
             AiProperties props = new AiProperties("http://127.0.0.1:" + slow.getAddress().getPort() + "/v1", "k",
-                    "m", Duration.ofSeconds(2), Duration.ofMillis(300), null, true);
+                    "m", Duration.ofSeconds(2), Duration.ofMillis(300), null, true, null);
             AiConfig config = new AiConfig();
             OpenAiCompatibleAnalysisService real = new OpenAiCompatibleAnalysisService(
                     config.aiRestClient(RestClient.builder(), props), props, AiTestData.MAPPER);
@@ -168,7 +168,7 @@ class OpenAiCompatibleAnalysisServiceTest {
     }
 
     private static AiProperties properties(String key, Duration readTimeout) {
-        return new AiProperties("http://ai.test/v1", key, "test-model", Duration.ofSeconds(1), readTimeout, null, true);
+        return new AiProperties("http://ai.test/v1", key, "test-model", Duration.ofSeconds(1), readTimeout, null, true, null);
     }
 
     private static String completion(String content) throws Exception {

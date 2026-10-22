@@ -75,6 +75,53 @@ describe("TransactionsPage", () => {
     expect(await screen.findByText("Cadou pentru test")).toBeInTheDocument();
   });
 
+  it("completează formularul dintr-o poză și permite modificarea înainte de salvare", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TransactionsPage />);
+    await findTable();
+
+    await user.click(screen.getByRole("button", { name: "Adaugă tranzacție" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Tranzacție nouă",
+    });
+
+    await user.upload(
+      within(dialog).getByTestId("receipt-input"),
+      new File(["x"], "bon.jpg", { type: "image/jpeg" }),
+    );
+
+    await waitFor(
+      () =>
+        expect(
+          within(dialog).getByRole("textbox", { name: /Sumă/ }),
+        ).toHaveValue("87.5"),
+      { timeout: 5000 },
+    );
+    expect(
+      within(dialog).getByRole("textbox", { name: /Descriere/ }),
+    ).toHaveValue("Bon exemplu (mod demo) - cumpărături");
+    expect(
+      within(dialog).getByRole("combobox", { name: /Categorie/ }),
+    ).toHaveTextContent("Alimente");
+    expect(
+      within(dialog).getByText(/Am completat câmpurile din poză/),
+    ).toBeInTheDocument();
+
+    const description = within(dialog).getByRole("textbox", {
+      name: /Descriere/,
+    });
+    await user.clear(description);
+    await user.type(description, "Bon scanat corectat");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Adaugă tranzacția" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText("Bon scanat corectat")).toBeInTheDocument();
+  });
+
   it("cere confirmare înainte de ștergere și elimină tranzacția", async () => {
     const user = userEvent.setup();
     renderWithProviders(<TransactionsPage />);

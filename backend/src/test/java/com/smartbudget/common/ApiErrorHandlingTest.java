@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,14 +15,18 @@ import com.smartbudget.ai.AiAnalysis;
 import com.smartbudget.ai.AiInsightsController;
 import com.smartbudget.ai.AiInsightsResponse;
 import com.smartbudget.ai.AiInsightsService;
+import com.smartbudget.ai.ReceiptScan;
 import com.smartbudget.budget.BudgetController;
 import com.smartbudget.budget.BudgetService;
 import com.smartbudget.goal.GoalController;
 import com.smartbudget.goal.GoalService;
 import com.smartbudget.transaction.TransactionController;
+import com.smartbudget.transaction.TransactionScanService;
 import com.smartbudget.transaction.TransactionService;
+import com.smartbudget.transaction.TransactionType;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -32,6 +37,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -53,11 +59,46 @@ class ApiErrorHandlingTest {
     @MockitoBean
     private TransactionService transactionService;
     @MockitoBean
+    private TransactionScanService transactionScanService;
+    @MockitoBean
     private BudgetService budgetService;
     @MockitoBean
     private GoalService goalService;
     @MockitoBean
     private AiInsightsService aiInsightsService;
+
+    @Test
+    void scanReturnsProposedTransactionFields() throws Exception {
+        when(transactionScanService.scan(any())).thenReturn(new ReceiptScan(TransactionType.EXPENSE,
+                new BigDecimal("87.50"), "Kaufland", LocalDate.of(2026, 10, 20), "food"));
+
+        mvc.perform(multipart("/api/v1/transactions/scan")
+                        .file(new MockMultipartFile("image", "bon.jpg", "image/jpeg", new byte[] {1})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("EXPENSE"))
+                .andExpect(jsonPath("$.amount").value(87.5))
+                .andExpect(jsonPath("$.description").value("Kaufland"))
+                .andExpect(jsonPath("$.transactionDate").value("2026-10-20"))
+                .andExpect(jsonPath("$.categoryId").value("food"));
+    }
+
+    @Test
+    void scanWithoutImagePartReturns400() throws Exception {
+        mvc.perform(multipart("/api/v1/transactions/scan"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("image")));
+    }
+
+    @Test
+    void scanFailuresAreReturnedAsControlledErrors() throws Exception {
+        when(transactionScanService.scan(any()))
+                .thenThrow(new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "Nu am putut recunoaște o tranzacție."));
+
+        mvc.perform(multipart("/api/v1/transactions/scan")
+                        .file(new MockMultipartFile("image", "bon.jpg", "image/jpeg", new byte[] {1})))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value("Nu am putut recunoaște o tranzacție."));
+    }
 
     @Test
     void invalidTransactionBodyReturns400WithFieldErrors() throws Exception {

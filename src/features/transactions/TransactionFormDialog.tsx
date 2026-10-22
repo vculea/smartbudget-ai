@@ -13,11 +13,16 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@mui/material";
-import { useEffect } from "react";
+import { Camera } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError, getErrorMessage } from "../../api";
-import type { Transaction, TransactionType } from "../../types";
+import type {
+  Transaction,
+  TransactionScan,
+  TransactionType,
+} from "../../types";
 import { todayIso } from "../../utils/date";
 import {
   amountField,
@@ -26,7 +31,9 @@ import {
   requiredText,
 } from "../../utils/validation";
 import { useCategories } from "../categories/useCategories";
-import { useSaveTransaction } from "./hooks";
+import { useSaveTransaction, useScanTransaction } from "./hooks";
+
+const DESCRIPTION_MAX = 120;
 
 const schema = z.object({
   type: z.enum(["INCOME", "EXPENSE"]),
@@ -80,6 +87,9 @@ function TransactionForm({
     isError: categoriesError,
   } = useCategories();
   const save = useSaveTransaction();
+  const scan = useScanTransaction();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [scanned, setScanned] = useState<TransactionScan | null>(null);
 
   const {
     control,
@@ -113,6 +123,25 @@ function TransactionForm({
       setValue("categoryId", "");
     }
   }, [type, categories, categoryId, availableCategories, setValue]);
+
+  const handleFileSelected = async (file: File | undefined) => {
+    if (!file) return;
+    setScanned(null);
+    try {
+      const result = await scan.mutateAsync(file);
+      const options = { shouldValidate: true, shouldDirty: true };
+      setValue("type", result.type, options);
+      if (result.amount !== null) setValue("amount", String(result.amount), options);
+      if (result.description)
+        setValue("description", result.description.slice(0, DESCRIPTION_MAX), options);
+      if (result.transactionDate)
+        setValue("transactionDate", result.transactionDate, options);
+      setValue("categoryId", result.categoryId ?? "", options);
+      setScanned(result);
+    } catch {
+      // Eroarea este afișată din starea mutației.
+    }
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -148,6 +177,46 @@ function TransactionForm({
             <Alert severity="error">
               Categoriile nu au putut fi încărcate.
             </Alert>
+          )}
+
+          {!transaction && (
+            <>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                data-testid="receipt-input"
+                onChange={(event) => {
+                  void handleFileSelected(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                variant="outlined"
+                startIcon={<Camera size={18} />}
+                disabled={scan.isPending || save.isPending}
+                onClick={() => fileInput.current?.click()}
+              >
+                {scan.isPending
+                  ? "Se citește poza..."
+                  : "Completează din poză (bon, factură)"}
+              </Button>
+              {scan.isError && (
+                <Alert severity="error">{getErrorMessage(scan.error)}</Alert>
+              )}
+              {scanned && (
+                <Alert severity={scanned.amount === null ? "warning" : "info"}>
+                  Am completat câmpurile din poză. Verifică-le și modifică ce
+                  nu este corect
+                  {scanned.amount === null && " (suma nu a putut fi citită)"}
+                  {scanned.categoryId === null &&
+                    " (alege categoria manual)"}
+                  , apoi adaugă tranzacția.
+                </Alert>
+              )}
+            </>
           )}
 
           <Controller
@@ -252,7 +321,11 @@ function TransactionForm({
         <Button color="inherit" onClick={onClose} disabled={save.isPending}>
           Anulează
         </Button>
-        <Button type="submit" variant="contained" disabled={save.isPending}>
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={save.isPending || scan.isPending}
+        >
           {save.isPending
             ? "Se salvează..."
             : transaction
