@@ -51,7 +51,9 @@ const normalize = (text: string) =>
     .trim();
 
 /** Același tip și aceeași descriere (fără diacritice, majuscule, punctuație): aceeași categorie. */
-export function sameDescriptionKey(draft: Pick<ImportDraft, "type" | "description">) {
+export function sameDescriptionKey(
+  draft: Pick<ImportDraft, "type" | "description">,
+) {
   return `${draft.type}|${normalize(draft.description.trim())}`;
 }
 
@@ -332,7 +334,11 @@ export function detectColumnsByHeader(
       found.amount !== undefined ||
       found.debit !== undefined ||
       found.credit !== undefined;
-    if (found.date !== undefined && found.description !== undefined && hasAmount) {
+    if (
+      found.date !== undefined &&
+      found.description !== undefined &&
+      hasAmount
+    ) {
       return { headerRow: i + 1, dateFormat: "DMY", ...found };
     }
   }
@@ -411,8 +417,12 @@ export function checkMapping(
     amountColumns.some((c) => parseLooseNumber(row[c]) !== null);
   if (!mostly(hasDate) || !mostly(textual) || !mostly(numeric)) return null;
   // O coloană cu aceeași valoare pe aproape toate rândurile (ex. „Decontat") e un status, nu comerciantul.
-  const distinct = new Set(sample.map((row) => normalize(cellText(row[description])))).size;
-  if (sample.length >= 8 ? distinct <= 2 : sample.length >= 4 && distinct <= 1) {
+  const distinct = new Set(
+    sample.map((row) => normalize(cellText(row[description]))),
+  ).size;
+  if (
+    sample.length >= 8 ? distinct <= 2 : sample.length >= 4 && distinct <= 1
+  ) {
     return null;
   }
   return { ...mapping, headerRow: start };
@@ -434,6 +444,7 @@ export function buildDrafts(
   rows: Cell[][],
   categories: Category[],
   mapping: ImportColumnMapping | null = detectColumnsByHeader(rows),
+  defaultDescription = "",
 ): ImportDraft[] {
   if (!rows.some((r) => r.some((c) => cellText(c) !== ""))) {
     throw new ImportFileError("Fișierul este gol.");
@@ -441,7 +452,7 @@ export function buildDrafts(
   if (
     !mapping ||
     mapping.date == null ||
-    mapping.description == null ||
+    (mapping.description == null && !defaultDescription.trim()) ||
     (mapping.amount == null && mapping.debit == null && mapping.credit == null)
   ) {
     throw new ImportFileError(MISSING_COLUMNS_MESSAGE);
@@ -509,9 +520,9 @@ export function buildDrafts(
       sourceRow,
       type,
       amount: signed === null ? "" : formatAmountInput(signed),
-      description: cutDescription(
-        cellText(cell(cells, "description")),
-        cutAt,
+      description: (
+        cutDescription(cellText(cell(cells, "description")), cutAt) ||
+        squeeze(defaultDescription)
       ).slice(0, DESCRIPTION_MAX),
       transactionDate: parseLooseDate(
         cell(cells, "date"),
@@ -533,6 +544,40 @@ export function buildDrafts(
   return complete;
 }
 
+export interface ImportColumnChoice {
+  index: number;
+  /** Titlul coloanei și o valoare exemplu, ca utilizatorul să o recunoască. */
+  label: string;
+}
+
+/**
+ * Coloanele fișierului pentru alegerea manuală; datele încep la primul rând cu o dată,
+ * iar rândul de deasupra e considerat antetul.
+ */
+export function describeColumns(rows: Cell[][]): {
+  headerRow: number;
+  columns: ImportColumnChoice[];
+} {
+  const isDateCell = (c: Cell) =>
+    (typeof c === "string" || c instanceof Date) && parseLooseDate(c) !== "";
+  const firstDate = rows.findIndex((row, i) => i < 50 && row.some(isDateCell));
+  const headerRow = firstDate >= 0 ? firstDate : 1;
+  const header = headerRow > 0 ? (rows[headerRow - 1] ?? []) : [];
+  const data = rows.slice(headerRow, headerRow + 20);
+  const width = Math.max(0, ...rows.slice(0, 50).map((row) => row.length));
+
+  const columns: ImportColumnChoice[] = [];
+  for (let index = 0; index < width; index++) {
+    const sample = data
+      .map((row) => cellText(row[index]))
+      .find((text) => text !== "");
+    if (sample === undefined) continue;
+    const title = cellText(header[index]) || `Coloana ${index + 1}`;
+    columns.push({ index, label: `${title} (ex.: ${sample.slice(0, 30)})` });
+  }
+  return { headerRow, columns };
+}
+
 /** Primele rânduri ale fișierului, ca text, pentru recunoașterea coloanelor de către AI. */
 export function sampleRowsForAi(rows: Cell[][]): string[][] {
   return rows
@@ -545,7 +590,10 @@ export function categoryBatches(
   drafts: ImportDraft[],
   batchSize = CATEGORY_BATCH,
 ): { items: ImportCategoryItem[]; keysByIndex: Map<number, string[]> }[] {
-  const unique = new Map<string, { item: ImportCategoryItem; keys: string[] }>();
+  const unique = new Map<
+    string,
+    { item: ImportCategoryItem; keys: string[] }
+  >();
   for (const draft of drafts) {
     const description = draft.description.trim();
     if (draft.categoryId || !description) continue;
@@ -606,7 +654,9 @@ export function validateDraft(
 
 function isRealIso(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return !!match && isRealDate(Number(match[1]), Number(match[2]), Number(match[3]));
+  return (
+    !!match && isRealDate(Number(match[1]), Number(match[2]), Number(match[3]))
+  );
 }
 
 export function toTransactionInput(draft: ImportDraft): TransactionInput {
@@ -623,7 +673,9 @@ export function toTransactionInput(draft: ImportDraft): TransactionInput {
  * Rândurile cu dată, sumă și descriere valide, de verificat dacă există deja în aplicație;
  * `index` e poziția rândului în `drafts`.
  */
-export function existingCheckItems(drafts: ImportDraft[]): ImportExistingItem[] {
+export function existingCheckItems(
+  drafts: ImportDraft[],
+): ImportExistingItem[] {
   return drafts.flatMap((draft, index) => {
     const description = draft.description.trim();
     if (

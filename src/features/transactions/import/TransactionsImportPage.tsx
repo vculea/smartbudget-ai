@@ -32,10 +32,15 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../../components/common/PageHeader";
-import type { Category, TransactionType } from "../../../types";
+import type {
+  Category,
+  ImportColumnMapping,
+  TransactionType,
+} from "../../../types";
 import { formatCurrency } from "../../../utils/format";
 import { useCategories } from "../../categories/useCategories";
 import { useImportTransactions } from "../hooks";
+import { ColumnMappingCard } from "./ColumnMappingCard";
 import {
   IMPORT_FILE_ACCEPT,
   ImportFileError,
@@ -43,13 +48,17 @@ import {
   sameDescriptionKey,
   toTransactionInput,
   validateDraft,
+  type Cell,
   type DraftErrors,
   type ImportDraft,
 } from "./importParser";
 import {
+  ColumnsNotRecognizedError,
   existingDrafts,
   loadImport,
+  loadImportWithMapping,
   memoryLessons,
+  type LoadedImport,
   rememberedCategories,
   suggestMissingCategories,
   type CategoryUpdate,
@@ -118,7 +127,12 @@ export function TransactionsImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "reading">("idle");
   const [dragging, setDragging] = useState(false);
-  const [mappingSource, setMappingSource] = useState<"ai" | "header">("ai");
+  const [mappingSource, setMappingSource] =
+    useState<LoadedImport["mappingSource"]>("ai");
+  const [unmapped, setUnmapped] = useState<{
+    rows: Cell[][];
+    fileName: string;
+  } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<{
     done: number;
@@ -216,55 +230,89 @@ export function TransactionsImportPage() {
     setPropagated(null);
     setExistingCheck(null);
     setProgress(null);
+    setUnmapped(null);
     setPhase("reading");
     try {
       const loaded = await loadImport(file, categories);
-      if (id !== runId.current) return;
-      setFileName(file.name);
-      setMappingSource(loaded.mappingSource);
-      setNotice(loaded.note ?? null);
-      setRows(loaded.drafts.map((draft) => ({ draft, included: true })));
-      setPhase("idle");
-
-      // Un singur apel pentru dubluri, în paralel cu alegerile anterioare ale utilizatorului.
-      const [existing, remembered] = await Promise.all([
-        existingDrafts(loaded.drafts),
-        rememberedCategories(loaded.drafts),
-      ]);
-      if (id !== runId.current) return;
-      if (existing.keys.size > 0) {
-        setRows(
-          (current) =>
-            current?.map((row) =>
-              existing.keys.has(row.draft.key)
-                ? { ...row, included: false, existing: true }
-                : row,
-            ) ?? null,
-        );
-      }
-      setExistingCheck({ count: existing.keys.size, failed: existing.failed });
-      applySuggestions(remembered);
-      // AI-ul primește doar ce a rămas, fără rândurile care există deja.
-      await runSuggestions(
-        loaded.drafts.filter((draft) => {
-          if (existing.keys.has(draft.key)) return false;
-          const categoryId = remembered.get(draft.key)?.categoryId;
-          return !(categoryId && byId.get(categoryId)?.type === draft.type);
-        }),
-        id,
-      );
+      await showLoaded(loaded, file.name, id);
     } catch (e) {
-      if (id !== runId.current) return;
-      setRows(null);
-      setPhase("idle");
-      setError(
-        e instanceof ImportFileError
-          ? e.message
-          : "Fișierul nu a putut fi procesat.",
-      );
+      handleFailure(e, id, file.name);
     } finally {
       if (fileInput.current) fileInput.current.value = "";
     }
+  };
+
+  const handleManualMapping = async (
+    mapping: ImportColumnMapping,
+    defaultDescription: string,
+  ) => {
+    if (!unmapped) return;
+    const id = ++runId.current;
+    setError(null);
+    setPhase("reading");
+    try {
+      const loaded = loadImportWithMapping(
+        unmapped.rows,
+        categories,
+        mapping,
+        defaultDescription,
+      );
+      setUnmapped(null);
+      await showLoaded(loaded, unmapped.fileName, id);
+    } catch (e) {
+      handleFailure(e, id, unmapped.fileName);
+    }
+  };
+
+  const handleFailure = (e: unknown, id: number, name: string) => {
+    if (id !== runId.current) return;
+    setRows(null);
+    setPhase("idle");
+    if (e instanceof ColumnsNotRecognizedError) {
+      setUnmapped({ rows: e.rows, fileName: name });
+    }
+    setError(
+      e instanceof ImportFileError
+        ? e.message
+        : "Fișierul nu a putut fi procesat.",
+    );
+  };
+
+  const showLoaded = async (loaded: LoadedImport, name: string, id: number) => {
+    if (id !== runId.current) return;
+    setFileName(name);
+    setMappingSource(loaded.mappingSource);
+    setNotice(loaded.note ?? null);
+    setRows(loaded.drafts.map((draft) => ({ draft, included: true })));
+    setPhase("idle");
+
+    // Un singur apel pentru dubluri, în paralel cu alegerile anterioare ale utilizatorului.
+    const [existing, remembered] = await Promise.all([
+      existingDrafts(loaded.drafts),
+      rememberedCategories(loaded.drafts),
+    ]);
+    if (id !== runId.current) return;
+    if (existing.keys.size > 0) {
+      setRows(
+        (current) =>
+          current?.map((row) =>
+            existing.keys.has(row.draft.key)
+              ? { ...row, included: false, existing: true }
+              : row,
+          ) ?? null,
+      );
+    }
+    setExistingCheck({ count: existing.keys.size, failed: existing.failed });
+    applySuggestions(remembered);
+    // AI-ul primește doar ce a rămas, fără rândurile care există deja.
+    await runSuggestions(
+      loaded.drafts.filter((draft) => {
+        if (existing.keys.has(draft.key)) return false;
+        const categoryId = remembered.get(draft.key)?.categoryId;
+        return !(categoryId && byId.get(categoryId)?.type === draft.type);
+      }),
+      id,
+    );
   };
 
   const updateDraft = useCallback(
@@ -317,10 +365,11 @@ export function TransactionsImportPage() {
 
   const toggleIncluded = useCallback(
     (key: string, included: boolean) =>
-      setRows((current) =>
-        current?.map((row) =>
-          row.draft.key === key ? { ...row, included } : row,
-        ) ?? null,
+      setRows(
+        (current) =>
+          current?.map((row) =>
+            row.draft.key === key ? { ...row, included } : row,
+          ) ?? null,
       ),
     [],
   );
@@ -328,7 +377,10 @@ export function TransactionsImportPage() {
   const errorsByKey = useMemo(
     () =>
       new Map(
-        (rows ?? []).map(({ draft }) => [draft.key, validateDraft(draft, byId)]),
+        (rows ?? []).map(({ draft }) => [
+          draft.key,
+          validateDraft(draft, byId),
+        ]),
       ),
     [rows, byId],
   );
@@ -337,7 +389,8 @@ export function TransactionsImportPage() {
   const invalidSelected = selected.filter(
     (row) => Object.keys(errorsByKey.get(row.draft.key) ?? {}).length > 0,
   );
-  const allSelected = !!rows && rows.length > 0 && selected.length === rows.length;
+  const allSelected =
+    !!rows && rows.length > 0 && selected.length === rows.length;
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -353,7 +406,9 @@ export function TransactionsImportPage() {
   const remembered = selected.filter(
     (r) => r.draft.aiState === "remembered",
   ).length;
-  const aiPicked = selected.filter((r) => r.draft.aiState === "suggested").length;
+  const aiPicked = selected.filter(
+    (r) => r.draft.aiState === "suggested",
+  ).length;
   const aiUnsure = selected.filter((r) => r.draft.aiState === "unsure").length;
   const categorizing = progress !== null;
   const pendingCategories = selected.filter((r) => !r.draft.categoryId).length;
@@ -398,7 +453,19 @@ export function TransactionsImportPage() {
         </Alert>
       )}
 
-      {rows === null ? (
+      {rows === null && unmapped ? (
+        <ColumnMappingCard
+          rows={unmapped.rows}
+          fileName={unmapped.fileName}
+          busy={reading}
+          onConfirm={(mapping, text) => void handleManualMapping(mapping, text)}
+          onCancel={() => {
+            setUnmapped(null);
+            setError(null);
+            fileInput.current?.click();
+          }}
+        />
+      ) : rows === null ? (
         <UploadCard
           dragging={dragging}
           busy={reading || categoriesLoading}
@@ -426,8 +493,12 @@ export function TransactionsImportPage() {
                 {formatCurrency(totals.expense)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Coloane recunoscute{" "}
-                {mappingSource === "ai" ? "de AI" : "după titluri"}
+                Coloane{" "}
+                {mappingSource === "ai"
+                  ? "recunoscute de AI"
+                  : mappingSource === "header"
+                    ? "recunoscute după titluri"
+                    : "alese de tine"}
                 {remembered > 0 && ` · Categorii reținute: ${remembered}`}
                 {aiPicked + aiUnsure > 0 &&
                   ` · Categorii alese de AI: ${aiPicked} · De ales de tine: ${aiUnsure}`}
@@ -504,8 +575,8 @@ export function TransactionsImportPage() {
           )}
           {invalidSelected.length > 0 && !categorizing && (
             <Alert severity="warning" sx={{ mx: 2, mb: 2 }}>
-              Corectează rândurile marcate (de exemplu alege categoria unde AI-ul
-              nu a știut) sau debifează-le ca să nu fie importate.
+              Corectează rândurile marcate (de exemplu alege categoria unde
+              AI-ul nu a știut) sau debifează-le ca să nu fie importate.
             </Alert>
           )}
 
@@ -523,9 +594,12 @@ export function TransactionsImportPage() {
                       checked={allSelected}
                       indeterminate={selected.length > 0 && !allSelected}
                       onChange={(_, checked) =>
-                        setRows((current) =>
-                          current?.map((row) => ({ ...row, included: checked })) ??
-                          null,
+                        setRows(
+                          (current) =>
+                            current?.map((row) => ({
+                              ...row,
+                              included: checked,
+                            })) ?? null,
                         )
                       }
                       slotProps={{
@@ -640,14 +714,14 @@ function UploadCard({
             color="text.secondary"
             sx={{ maxWidth: 560 }}
           >
-            Formate: .csv și .xlsx (prima foaie), până la {MAX_IMPORT_ROWS}{" "}
-            de rânduri. AI-ul ales în Setări AI recunoaște coloanele (data,
+            Formate: .csv și .xlsx (prima foaie), până la {MAX_IMPORT_ROWS} de
+            rânduri. AI-ul ales în Setări AI recunoaște coloanele (data,
             descrierea, suma, tipul) și propune categoria fiecărei tranzacții;
             unde nu e sigur, rândul rămâne marcat ca să alegi tu categoria. Poți
             corecta totul în pasul următor, înainte de salvare. Categoriile pe
-            care le păstrezi sau le corectezi sunt reținute și completate singure
-            la importurile următoare. Descrierile tranzacțiilor sunt trimise
-            modelului AI ales.
+            care le păstrezi sau le corectezi sunt reținute și completate
+            singure la importurile următoare. Descrierile tranzacțiilor sunt
+            trimise modelului AI ales.
           </Typography>
         </Stack>
       </Box>
@@ -679,7 +753,8 @@ const PreviewTableRow = memo(function PreviewTableRow({
 }: PreviewTableRowProps) {
   const label = (name: string) => `${name} rând ${draft.sourceRow}`;
   const hasErrors = included && Object.keys(errors).length > 0;
-  const show = (message: string | undefined) => (included ? message : undefined);
+  const show = (message: string | undefined) =>
+    included ? message : undefined;
   const options = categories.filter((c) => c.type === draft.type);
 
   return (
@@ -710,7 +785,9 @@ const PreviewTableRow = memo(function PreviewTableRow({
           value={draft.transactionDate}
           error={!!show(errors.transactionDate)}
           helperText={show(errors.transactionDate)}
-          onChange={(e) => onChange(draft.key, { transactionDate: e.target.value })}
+          onChange={(e) =>
+            onChange(draft.key, { transactionDate: e.target.value })
+          }
           slotProps={{ htmlInput: { "aria-label": label("Data") } }}
         />
       </TableCell>

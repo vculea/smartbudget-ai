@@ -9,7 +9,11 @@ import type {
   TransactionImportAiApi,
   TransactionsApi,
 } from "../../../api/contracts";
-import type { Category, CategoryMemoryLesson } from "../../../types";
+import type {
+  Category,
+  CategoryMemoryLesson,
+  ImportColumnMapping,
+} from "../../../types";
 import {
   ImportFileError,
   buildDrafts,
@@ -19,15 +23,25 @@ import {
   existingCheckItems,
   readImportFile,
   sampleRowsForAi,
+  type Cell,
   type ImportDraft,
 } from "./importParser";
 
 export interface LoadedImport {
   drafts: ImportDraft[];
-  /** `ai`: coloanele le-a recunoscut AI-ul; `header`: după titlurile coloanelor. */
-  mappingSource: "ai" | "header";
+  /** `ai`: coloanele le-a recunoscut AI-ul; `header`: după titluri; `manual`: alese de utilizator. */
+  mappingSource: "ai" | "header" | "manual";
   /** Motivul pentru care s-a folosit varianta de rezervă. */
   note?: string;
+}
+
+/** Coloanele nu au putut fi recunoscute automat; rândurile citite permit alegerea lor manuală. */
+export class ColumnsNotRecognizedError extends ImportFileError {
+  rows: Cell[][];
+  constructor(message: string, rows: Cell[][]) {
+    super(message);
+    this.rows = rows;
+  }
 }
 
 /** Citește fișierul și recunoaște coloanele cu AI-ul ales în Setări AI (rezervă: titlurile coloanelor). */
@@ -67,18 +81,45 @@ export async function loadImport(
         mappingSource: "ai",
       };
     }
-    aiFailure = "Coloanele recunoscute de AI nu se potrivesc cu conținutul fișierului.";
+    aiFailure =
+      "Coloanele recunoscute de AI nu se potrivesc cu conținutul fișierului.";
   }
   const headerMapping = detectColumnsByHeader(rows);
   if (!headerMapping) {
-    throw new ImportFileError(
+    throw new ColumnsNotRecognizedError(
       `Nu am putut recunoaște coloanele fișierului. ${aiFailure}`.trim(),
+      rows,
     );
   }
   return {
     drafts: buildDrafts(rows, categories, headerMapping),
     mappingSource: "header",
     note: `${aiFailure} Am recunoscut coloanele după titluri.`.trim(),
+  };
+}
+
+/** Construiește tranzacțiile din coloanele alese de utilizator; rândurile cu suma 0 se omit. */
+export function loadImportWithMapping(
+  rows: Cell[][],
+  categories: Category[],
+  mapping: ImportColumnMapping,
+  defaultDescription: string,
+): LoadedImport {
+  const all = buildDrafts(rows, categories, mapping, defaultDescription);
+  const drafts = all.filter((draft) => Number(draft.amount) !== 0);
+  if (drafts.length === 0) {
+    throw new ImportFileError(
+      "Coloanele alese nu conțin nicio sumă diferită de 0. Alege altă coloană pentru sumă.",
+    );
+  }
+  const skipped = all.length - drafts.length;
+  return {
+    drafts,
+    mappingSource: "manual",
+    note:
+      skipped > 0
+        ? `Am omis ${skipped} ${skipped === 1 ? "rând" : "rânduri"} cu suma 0.`
+        : undefined,
   };
 }
 
@@ -131,9 +172,7 @@ export async function existingDrafts(
   try {
     const indexes = await api.findExisting(items);
     return {
-      keys: new Set(
-        indexes.flatMap((i) => (drafts[i] ? [drafts[i].key] : [])),
-      ),
+      keys: new Set(indexes.flatMap((i) => (drafts[i] ? [drafts[i].key] : []))),
       failed: false,
     };
   } catch {

@@ -42,13 +42,15 @@ describe("TransactionsImportPage", () => {
     expect(
       within(table).getByRole("textbox", { name: "Descriere rând 3" }),
     ).toHaveValue("Import test cafea");
-    expect(within(table).getByRole("textbox", { name: "Suma rând 3" })).toHaveValue(
-      "12.5",
-    );
+    expect(
+      within(table).getByRole("textbox", { name: "Suma rând 3" }),
+    ).toHaveValue("12.5");
 
     const save = screen.getByRole("button", { name: "Adaugă 3 tranzacții" });
     expect(save).toBeDisabled();
-    expect(await screen.findByText("1 rânduri de corectat")).toBeInTheDocument();
+    expect(
+      await screen.findByText("1 rânduri de corectat"),
+    ).toBeInTheDocument();
     expect(
       await screen.findByText("AI-ul nu a știut – alege categoria"),
     ).toBeInTheDocument();
@@ -85,7 +87,9 @@ describe("TransactionsImportPage", () => {
       );
     const first = renderImport();
     await user.upload(screen.getByLabelText("Fișier de importat"), file());
-    const add = await screen.findByRole("button", { name: "Adaugă 2 tranzacții" });
+    const add = await screen.findByRole("button", {
+      name: "Adaugă 2 tranzacții",
+    });
     await waitFor(() => expect(add).toBeEnabled());
     await user.click(add);
     expect(
@@ -102,8 +106,12 @@ describe("TransactionsImportPage", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Există deja")).toHaveLength(2);
-    expect(screen.getByRole("checkbox", { name: "Include rând 2" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Include rând 3" })).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Include rând 2" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Include rând 3" }),
+    ).not.toBeChecked();
     expect(
       screen.getByRole("button", { name: "Adaugă 0 tranzacții" }),
     ).toBeDisabled();
@@ -163,13 +171,19 @@ describe("TransactionsImportPage", () => {
     renderImport();
     await user.upload(
       screen.getByLabelText("Fișier de importat"),
-      new File(["Data;Descriere;Suma\n01.01.2030;Plata XYZ 987;-20"], "extras.csv", {
-        type: "text/csv",
-      }),
+      new File(
+        ["Data;Descriere;Suma\n01.01.2030;Plata XYZ 987;-20"],
+        "extras.csv",
+        {
+          type: "text/csv",
+        },
+      ),
     );
     await screen.findByText("AI-ul nu a știut – alege categoria");
 
-    const improve = screen.getByRole("button", { name: "Îmbunătățește răspunsul" });
+    const improve = screen.getByRole("button", {
+      name: "Îmbunătățește răspunsul",
+    });
     await waitFor(() => expect(improve).toBeEnabled());
     await user.click(improve);
 
@@ -198,8 +212,12 @@ describe("TransactionsImportPage", () => {
     await waitFor(() => expect(category).toHaveTextContent("Alimente"));
 
     await user.click(category);
-    await user.click(await screen.findByRole("option", { name: "Restaurante" }));
-    await user.click(screen.getByRole("button", { name: "Adaugă 1 tranzacție" }));
+    await user.click(
+      await screen.findByRole("option", { name: "Restaurante" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Adaugă 1 tranzacție" }),
+    );
     await screen.findByRole(
       "table",
       { name: "Lista tranzacțiilor" },
@@ -273,5 +291,48 @@ describe("TransactionsImportPage", () => {
     expect(
       await screen.findByText(/Nu am putut recunoaște coloanele/),
     ).toBeInTheDocument();
+  });
+
+  it("permite alegerea manuală a coloanelor, cu descriere implicită", async () => {
+    const user = userEvent.setup();
+    renderImport();
+    const schedule = [
+      "Tranzacții;;",
+      "Data rambursarii;Suma achitata;Dobanda",
+      "17.10.2030;5883;0",
+      "16.10.2030;0;0",
+      "15.10.2030;1820,23;839,82",
+    ].join("\n");
+    await user.upload(
+      screen.getByLabelText("Fișier de importat"),
+      new File([schedule], "credit.csv", { type: "text/csv" }),
+    );
+
+    await user.click(
+      await screen.findByRole("combobox", { name: /Coloana cu data/ }),
+    );
+    await user.click(
+      await screen.findByRole("option", { name: /Data rambursarii/ }),
+    );
+    await user.click(screen.getByRole("combobox", { name: /Coloana cu suma/ }));
+    await user.click(
+      await screen.findByRole("option", { name: /Suma achitata/ }),
+    );
+    await user.type(
+      screen.getByLabelText(/Descrierea tranzacțiilor/),
+      "Rată credit",
+    );
+    await user.click(screen.getByRole("button", { name: "Continuă" }));
+
+    const table = await screen.findByRole(
+      "table",
+      { name: "Previzualizare import" },
+      { timeout: 3000 },
+    );
+    // antet + 2 rânduri (suma 0 e omisă)
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    expect(
+      within(table).getByRole("textbox", { name: "Descriere rând 3" }),
+    ).toHaveValue("Rată credit");
   });
 });
