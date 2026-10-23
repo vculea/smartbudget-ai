@@ -1,0 +1,12 @@
+# Runs the backend against the public MongoDB (MONGODB_URI from backend/.env) instead of the local container.
+# Usage (from backend/): docker compose -f docker-compose.yml -f docker-compose.public-db.yml up -d --build backend frontend
+# WARNING: this works on the real data. Keep SEED_ENABLED=false.
+services:
+  mongo:
+    profiles: ["local-db"]
+
+  backend:
+    depends_on: !reset []
+    environment:
+      MONGODB_URI: ${MONGODB_URI:?set MONGODB_URI in .env}
+      SEED_ENABLED: "false"
