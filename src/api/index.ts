@@ -3,6 +3,7 @@ import {
   mockAiInsightsApi,
   mockBudgetsApi,
   mockCategoriesApi,
+  mockCategoryMemoryApi,
   mockDashboardApi,
   mockGoalsApi,
   mockTransactionImportAiApi,
@@ -12,6 +13,7 @@ import type {
   AiInsightsApi,
   BudgetsApi,
   CategoriesApi,
+  CategoryMemoryApi,
   DashboardApi,
   GoalsApi,
   TransactionImportAiApi,
@@ -20,6 +22,7 @@ import type {
 import { httpAiInsightsApi } from "./services/aiInsightsApi";
 import { httpBudgetsApi } from "./services/budgetsApi";
 import { httpCategoriesApi } from "./services/categoriesApi";
+import { httpCategoryMemoryApi } from "./services/categoryMemoryApi";
 import { httpDashboardApi } from "./services/dashboardApi";
 import { httpGoalsApi } from "./services/goalsApi";
 import { httpImportAiApi } from "./services/importAiApi";
@@ -61,6 +64,9 @@ export const transactionImportAiApi: TransactionImportAiApi = env.demoMode
 export const categoriesApi: CategoriesApi = env.demoMode
   ? mockCategoriesApi
   : httpCategoriesApi;
+export const categoryMemoryApi: CategoryMemoryApi = env.demoMode
+  ? mockCategoryMemoryApi
+  : httpCategoryMemoryApi;
 export const budgetsApi: BudgetsApi = env.demoMode
   ? mockBudgetsApi
   : httpBudgetsApi;

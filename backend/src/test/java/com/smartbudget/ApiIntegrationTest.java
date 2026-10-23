@@ -22,6 +22,7 @@ import com.smartbudget.ai.FinancialSummary;
 import com.smartbudget.budget.Budget;
 import com.smartbudget.budget.BudgetRepository;
 import com.smartbudget.category.Category;
+import com.smartbudget.category.CategoryMemoryVote;
 import com.smartbudget.category.CategoryRepository;
 import com.smartbudget.category.DefaultCategories;
 import com.smartbudget.common.ApiException;
@@ -96,6 +97,7 @@ class ApiIntegrationTest {
         contributions.deleteAll();
         goals.deleteAll();
         categories.deleteAll();
+        mongoTemplate.remove(new org.springframework.data.mongodb.core.query.Query(), CategoryMemoryVote.class);
         Mockito.reset(ai);
         categories.save(new Category("salary", TestUser.ID, "Salariu", TransactionType.INCOME, "#10b981", "briefcase"));
         categories.save(new Category("food", TestUser.ID, "Alimente", TransactionType.EXPENSE, "#4f46e5", "cart"));
@@ -207,6 +209,71 @@ class ApiIntegrationTest {
         return color == null
                 ? "{\"name\":\"%s\",\"type\":\"%s\"}".formatted(name, type)
                 : "{\"name\":\"%s\",\"type\":\"%s\",\"color\":\"%s\"}".formatted(name, type, color);
+    }
+
+    @Test
+    void categoryMemoryLearnsFromImportsCorrectionsAndEdits() throws Exception {
+        mvc.perform(post("/api/v1/category-memory/learn").contentType(MediaType.APPLICATION_JSON).content("""
+                        {"entries": [
+                          {"description": "KAUFLAND 12 CLUJ", "type": "EXPENSE", "categoryId": "food", "corrected": false},
+                          {"description": "GLOVO 1", "type": "EXPENSE", "categoryId": "food", "corrected": false},
+                          {"description": "GLOVO 2", "type": "EXPENSE", "categoryId": "food", "corrected": false},
+                          {"description": "GLOVO 3", "type": "EXPENSE", "categoryId": "fun", "corrected": true},
+                          {"description": "Salariu", "type": "EXPENSE", "categoryId": "salary", "corrected": false}]}"""))
+                .andExpect(status().isNoContent());
+
+        String matchBody = """
+                {"items": [
+                  {"index": 0, "description": "Kaufland Brasov", "type": "EXPENSE"},
+                  {"index": 1, "description": "GLOVO 99", "type": "EXPENSE"},
+                  {"index": 2, "description": "Necunoscut", "type": "EXPENSE"},
+                  {"index": 3, "description": "Kaufland", "type": "INCOME"}]}""";
+        mvc.perform(post("/api/v1/category-memory/match").contentType(MediaType.APPLICATION_JSON).content(matchBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suggestions[0].categoryId").value("food"))
+                // the correction replaced the two earlier choices
+                .andExpect(jsonPath("$.suggestions[1].categoryId").value("fun"))
+                .andExpect(jsonPath("$.suggestions[2].categoryId").doesNotExist())
+                .andExpect(jsonPath("$.suggestions[3].categoryId").doesNotExist());
+        // the entry with a category of the other type was ignored
+        assertThat(mongoTemplate.count(new org.springframework.data.mongodb.core.query.Query(), CategoryMemoryVote.class))
+                .isEqualTo(2);
+
+        // a transaction added by hand teaches the memory; changing its category corrects it
+        String txId = createTransaction("EXPENSE", "40", "Netflix.com", "2026-10-01", "fun");
+        mvc.perform(put("/api/v1/transactions/" + txId).contentType(MediaType.APPLICATION_JSON)
+                        .content(transactionJson("EXPENSE", "40", "Netflix.com", "2026-10-01", "food")))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/category-memory"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].key").value("netflix"))
+                .andExpect(jsonPath("$[0].categoryId").value("food"))
+                .andExpect(jsonPath("$[0].certain").value(true))
+                .andExpect(jsonPath("$.length()").value(3));
+
+        // deleting a category moves what was remembered for it
+        mvc.perform(delete("/api/v1/categories/fun").param("replacementId", "food")).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/category-memory/match").contentType(MediaType.APPLICATION_JSON).content(matchBody))
+                .andExpect(jsonPath("$.suggestions[1].categoryId").value("food"));
+
+        // other users see nothing; forgetting works per merchant and for everything
+        mvc.perform(get("/api/v1/category-memory").with(user("user-2"))).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(delete("/api/v1/category-memory").param("type", "EXPENSE").param("key", "netflix"))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/category-memory")).andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(delete("/api/v1/category-memory/all")).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/category-memory")).andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void categoryMemoryValidatesItsRequests() throws Exception {
+        mvc.perform(post("/api/v1/category-memory/match").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\": []}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/category-memory/learn").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"entries\": [{\"description\": \"\", \"type\": \"EXPENSE\", \"categoryId\": \"food\"}]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/category-memory").with(anonymous())).andExpect(status().isUnauthorized());
     }
 
     @Test

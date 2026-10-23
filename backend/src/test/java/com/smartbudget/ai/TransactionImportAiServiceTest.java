@@ -6,11 +6,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryResponse;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.transaction.TransactionType;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import org.springframework.http.HttpStatus;
 class TransactionImportAiServiceTest {
 
     private final CategoryService categories = mock(CategoryService.class);
+    private final CategoryMemoryService memory = mock(CategoryMemoryService.class);
     private TransactionImportAiService service;
 
     @BeforeEach
@@ -27,7 +30,8 @@ class TransactionImportAiServiceTest {
                 new CategoryResponse("fun", "Divertisment", TransactionType.EXPENSE, null, null),
                 new CategoryResponse("salary", "Salariu", TransactionType.INCOME, null, null)));
         service = new TransactionImportAiService(null,
-                new AiProperties(null, null, null, null, null, null, null, null), new ObjectMapper(), categories);
+                new AiProperties(null, null, null, null, null, null, null, null), new ObjectMapper(), categories,
+                memory);
     }
 
     @Test
@@ -114,5 +118,25 @@ class TransactionImportAiServiceTest {
 
         assertThat(prompt.systemPrompt()).contains("\"id\":\"food\"").contains("Use null ONLY when");
         assertThat(prompt.userMessage()).contains("\"index\":7").contains("MEGA IMAGE").contains("EXPENSE");
+    }
+
+    @Test
+    void categoriesPromptIncludesTheUsersEarlierChoices() {
+        when(memory.examples(List.of("GLOVO 123"), Set.of(TransactionType.EXPENSE))).thenReturn(List.of(
+                new CategoryMemoryService.Example("glovo", TransactionType.EXPENSE, "fun")));
+
+        ImportAiPrompt prompt = service.categoriesPrompt(List.of(new ImportItem(0, "GLOVO 123", TransactionType.EXPENSE)));
+
+        assertThat(prompt.systemPrompt())
+                .contains("User's earlier choices (JSON):")
+                .contains("\"merchant\":\"glovo\"")
+                .contains("\"categoryId\":\"fun\"");
+    }
+
+    @Test
+    void categoriesPromptWithoutEarlierChoicesListsNone() {
+        ImportAiPrompt prompt = service.categoriesPrompt(List.of(new ImportItem(0, "X", TransactionType.EXPENSE)));
+
+        assertThat(prompt.systemPrompt()).contains("User's earlier choices (JSON):\n[]");
     }
 }

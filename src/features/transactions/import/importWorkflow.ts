@@ -1,6 +1,13 @@
-import { getErrorMessage, transactionImportAiApi } from "../../../api";
-import type { TransactionImportAiApi } from "../../../api/contracts";
-import type { Category } from "../../../types";
+import {
+  categoryMemoryApi,
+  getErrorMessage,
+  transactionImportAiApi,
+} from "../../../api";
+import type {
+  CategoryMemoryApi,
+  TransactionImportAiApi,
+} from "../../../api/contracts";
+import type { Category, CategoryMemoryLesson } from "../../../types";
 import {
   ImportFileError,
   buildDrafts,
@@ -75,6 +82,53 @@ export async function loadImport(
 export interface CategoryUpdate {
   /** `null`: AI-ul nu a fost sigur. */
   categoryId: string | null;
+  /** `memory`: din alegerile anterioare ale utilizatorului; `ai`: propusă de AI. */
+  source: "memory" | "ai";
+}
+
+/** Cât încape într-o cerere către memoria categoriilor (cât un import întreg). */
+const MEMORY_BATCH = 1000;
+
+/**
+ * Categoriile reținute din alegerile anterioare ale utilizatorului, pentru rândurile fără categorie.
+ * Dacă memoria nu răspunde, întoarce ce a găsit până atunci: restul rândurilor ajung la AI.
+ */
+export async function rememberedCategories(
+  drafts: ImportDraft[],
+  memory: CategoryMemoryApi = categoryMemoryApi,
+): Promise<Map<string, CategoryUpdate>> {
+  const updates = new Map<string, CategoryUpdate>();
+  for (const batch of categoryBatches(drafts, MEMORY_BATCH)) {
+    let matches;
+    try {
+      matches = await memory.match(batch.items);
+    } catch {
+      return updates;
+    }
+    for (const { index, categoryId } of matches) {
+      if (!categoryId) continue;
+      for (const key of batch.keysByIndex.get(index) ?? []) {
+        updates.set(key, { categoryId, source: "memory" });
+      }
+    }
+  }
+  return updates;
+}
+
+/**
+ * Ce învață memoria la salvarea importului: categoria păstrată pentru fiecare rând; un rând e o corectură
+ * dacă utilizatorul a înlocuit categoria propusă de memorie sau de AI.
+ */
+export function memoryLessons(drafts: ImportDraft[]): CategoryMemoryLesson[] {
+  return drafts
+    .filter((d) => d.categoryId && d.description.trim())
+    .map((d) => ({
+      description: d.description.trim(),
+      type: d.type,
+      categoryId: d.categoryId,
+      corrected:
+        !!d.suggestedCategoryId && d.suggestedCategoryId !== d.categoryId,
+    }));
 }
 
 /**
@@ -109,7 +163,7 @@ export async function suggestMissingCategories(
       const categoryId =
         suggestions.find((s) => s.index === item.index)?.categoryId ?? null;
       for (const key of batch.keysByIndex.get(item.index) ?? []) {
-        updates.set(key, { categoryId });
+        updates.set(key, { categoryId, source: "ai" });
       }
     }
     done += batch.items.length;

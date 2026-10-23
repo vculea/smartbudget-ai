@@ -2,6 +2,7 @@ import type {
   AiInsightsApi,
   BudgetsApi,
   CategoriesApi,
+  CategoryMemoryApi,
   DashboardApi,
   GoalsApi,
   TransactionImportAiApi,
@@ -35,6 +36,13 @@ import {
   type StoredTransaction,
 } from "./seed";
 import { loadDb, saveDb } from "./db";
+import {
+  forgetMemory,
+  learnMemory,
+  listMemory,
+  matchMemory,
+  moveMemoryCategory,
+} from "./categoryMemory";
 
 const delay = (factor = 1) =>
   new Promise<void>((resolve) => {
@@ -267,6 +275,7 @@ export const mockTransactionsApi: TransactionsApi = {
     };
     db.transactions.push(stored);
     saveDb(db);
+    learnMemory(db, [{ ...stored, corrected: false }]);
     return toTransaction(db, stored);
   },
 
@@ -291,6 +300,7 @@ export const mockTransactionsApi: TransactionsApi = {
     const index = db.transactions.findIndex((t) => t.id === id);
     if (index < 0) throw new ApiError("Tranzacția nu a fost găsită.", 404);
     validateTransaction(db, input);
+    const recategorized = db.transactions[index]?.categoryId !== input.categoryId;
     const stored: StoredTransaction = {
       id,
       ...input,
@@ -298,6 +308,7 @@ export const mockTransactionsApi: TransactionsApi = {
     };
     db.transactions[index] = stored;
     saveDb(db);
+    if (recategorized) learnMemory(db, [{ ...stored, corrected: true }]);
     return toTransaction(db, stored);
   },
 
@@ -477,8 +488,32 @@ export const mockCategoriesApi: CategoriesApi = {
         if (b.categoryId === id) b.categoryId = replacementId;
       });
     }
+    moveMemoryCategory(id, replacementId);
     db.categories = db.categories.filter((c) => c.id !== id);
     saveDb(db);
+  },
+};
+
+export const mockCategoryMemoryApi: CategoryMemoryApi = {
+  async match(items) {
+    await delay(0.5);
+    return matchMemory(loadDb(), items);
+  },
+  async learn(lessons) {
+    await delay(0.5);
+    learnMemory(loadDb(), lessons);
+  },
+  async list() {
+    await delay(0.5);
+    return listMemory(loadDb());
+  },
+  async forget(type, key) {
+    await delay(0.5);
+    forgetMemory(type, key);
+  },
+  async forgetAll() {
+    await delay(0.5);
+    forgetMemory();
   },
 };
 

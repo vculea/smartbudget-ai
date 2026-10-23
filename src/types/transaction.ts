@@ -70,6 +70,30 @@ export interface ImportCategorySuggestion {
   categoryId: string | null;
 }
 
+/**
+ * O categorie păstrată de utilizator la salvarea importului, din care aplicația învață.
+ * `corrected`: utilizatorul a înlocuit categoria propusă (de AI sau din memorie).
+ */
+export interface CategoryMemoryLesson {
+  description: string;
+  type: TransactionType;
+  categoryId: string;
+  corrected: boolean;
+}
+
+/**
+ * Un comerciant reținut: `key` sunt cuvintele care îl identifică, `categoryId` categoria folosită cel mai des.
+ * `certain` este `false` când utilizatorul l-a pus în categorii diferite (importul nu îl completează singur).
+ */
+export interface RememberedMerchant {
+  type: TransactionType;
+  key: string;
+  categoryId: string;
+  hits: number;
+  certain: boolean;
+  updatedAt: string;
+}
+
 /** Parametrii pentru `GET /transactions`. `page` începe de la 0. */
 export interface TransactionQuery {
   page: number;

@@ -1,9 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { categoriesApi, getErrorMessage, queryKeys } from "../../api";
+import {
+  categoriesApi,
+  categoryMemoryApi,
+  getErrorMessage,
+  queryKeys,
+} from "../../api";
 import { useToast } from "../../app/useToast";
-import type { CategoryInput } from "../../types";
+import type { CategoryInput, TransactionType } from "../../types";
 
-/** Numele categoriilor apar în tranzacții, bugete și dashboard, deci toate se reîncarcă. */
+/** Numele categoriilor apar în tranzacții, bugete, dashboard și memoria categoriilor, deci toate se reîncarcă. */
 function useInvalidateCategoryData() {
   const queryClient = useQueryClient();
   return () =>
@@ -15,6 +20,7 @@ function useInvalidateCategoryData() {
       queryClient.invalidateQueries({ queryKey: queryKeys.transactions }),
       queryClient.invalidateQueries({ queryKey: queryKeys.budgets }),
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboardAll }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.categoryMemory }),
     ]);
 }
 
@@ -58,5 +64,37 @@ export function useDeleteCategory() {
     },
     onError: (error) =>
       toast.error(getErrorMessage(error, "Categoria nu a putut fi ștearsă.")),
+  });
+}
+
+/** Comercianții pentru care importul alege singur categoria, învățați din alegerile utilizatorului. */
+export function useRememberedMerchants() {
+  return useQuery({
+    queryKey: queryKeys.categoryMemory,
+    queryFn: () => categoryMemoryApi.list(),
+  });
+}
+
+/** Fără `key` uită toți comercianții. */
+export function useForgetMerchant() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (merchant?: { type: TransactionType; key: string }) =>
+      merchant
+        ? categoryMemoryApi.forget(merchant.type, merchant.key)
+        : categoryMemoryApi.forgetAll(),
+    onSuccess: async (_data, merchant) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.categoryMemory,
+      });
+      toast.success(
+        merchant
+          ? `Am uitat categoria pentru „${merchant.key}”.`
+          : "Am uitat toate categoriile învățate.",
+      );
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Nu am putut șterge asocierea.")),
   });
 }

@@ -19,6 +19,7 @@ import { SectionCard } from "../../components/common/SectionCard";
 import type { Category, TransactionType } from "../../types";
 import { CategoryFormDialog } from "./CategoryFormDialog";
 import { DeleteCategoryDialog } from "./DeleteCategoryDialog";
+import { RememberedMerchantsCard } from "./RememberedMerchantsCard";
 import { useCategories } from "./useCategories";
 
 const SECTIONS: { type: TransactionType; title: string; empty: string }[] = [
@@ -41,7 +42,8 @@ type FormState = {
 };
 
 export function CategoriesPage() {
-  const { categories, isLoading, isError, error, refetch } = useCategories();
+  const { categories, byId, isLoading, isError, error, refetch } =
+    useCategories();
   const [form, setForm] = useState<FormState>({
     open: false,
     category: null,
@@ -173,6 +175,9 @@ export function CategoriesPage() {
               </SectionCard>
             );
           })}
+          <Box sx={{ gridColumn: "1 / -1" }}>
+            <RememberedMerchantsCard categoriesById={byId} />
+          </Box>
         </Box>
       )}
 

@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { loadDb } from "../../mocks/db";
+import { learnMemory } from "../../mocks/categoryMemory";
 import { CATEGORY } from "../../mocks/seed";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { CategoriesPage } from "./CategoriesPage";
@@ -66,6 +67,42 @@ describe("CategoriesPage", () => {
 
     expect(await within(list).findByText("Haine")).toBeInTheDocument();
     expect(within(list).queryByText("Shopping")).not.toBeInTheDocument();
+  });
+
+  it("arată categoriile învățate și permite uitarea lor", async () => {
+    learnMemory(loadDb(), [
+      {
+        description: "GLOVO 123",
+        type: "EXPENSE",
+        categoryId: CATEGORY.restaurants,
+        corrected: true,
+      },
+      {
+        description: "Lidl Cluj",
+        type: "EXPENSE",
+        categoryId: CATEGORY.groceries,
+        corrected: false,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(<CategoriesPage />);
+
+    const list = await screen.findByRole("list", { name: "Categorii învățate" });
+    expect(within(list).getByText("glovo")).toBeInTheDocument();
+    expect(within(list).getByText("Restaurante · o tranzacție")).toBeInTheDocument();
+
+    await user.click(within(list).getByRole("button", { name: "Uită glovo" }));
+    await waitFor(() =>
+      expect(within(list).queryByText("glovo")).not.toBeInTheDocument(),
+    );
+    expect(within(list).getByText("lidl cluj")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Uită tot" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Uiți toate categoriile învățate?",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Uită tot" }));
+    expect(await screen.findByText(/Încă nu am învățat nimic/)).toBeInTheDocument();
   });
 
   it("mută tranzacțiile în altă categorie înainte de ștergere", async () => {

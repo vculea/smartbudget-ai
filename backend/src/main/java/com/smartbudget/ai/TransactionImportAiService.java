@@ -2,6 +2,7 @@ package com.smartbudget.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryResponse;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -115,7 +116,12 @@ public class TransactionImportAiService {
             - Use null ONLY when the text is truly unreadable (a bare code, a person's name, no clue about the business).
               A recognisable brand or business type must get a category: a reasonable answer is better than null.
             - Return every input index exactly once.
+            - The user's earlier choices are listed below (merchant keywords and the categoryId the user picked).
+              They override the general examples above: for the same or a clearly similar merchant, use the user's
+              category. Do not apply them to unrelated merchants.
             Available categories (JSON):
+            %s
+            User's earlier choices (JSON):
             %s
             Reply with ONLY a JSON object, no markdown, in exactly this shape:
             {"results": [{"index": 0, "categoryId": "id-from-the-list-or-null"}]}""";
@@ -127,13 +133,15 @@ public class TransactionImportAiService {
     private final AiProperties properties;
     private final ObjectMapper objectMapper;
     private final CategoryService categoryService;
+    private final CategoryMemoryService categoryMemory;
 
     public TransactionImportAiService(RestClient aiRestClient, AiProperties properties, ObjectMapper objectMapper,
-            CategoryService categoryService) {
+            CategoryService categoryService, CategoryMemoryService categoryMemory) {
         this.restClient = aiRestClient;
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.categoryService = categoryService;
+        this.categoryMemory = categoryMemory;
     }
 
     // ---- column detection ----
@@ -183,11 +191,16 @@ public class TransactionImportAiService {
         List<Map<String, String>> categories = categoryService.list().stream()
                 .map(c -> Map.of("id", c.id(), "name", c.name(), "type", c.type().name()))
                 .toList();
+        List<Map<String, String>> examples = categoryMemory.examples(
+                        items.stream().map(ImportItem::description).toList(),
+                        items.stream().map(ImportItem::type).collect(Collectors.toSet())).stream()
+                .map(e -> Map.of("merchant", e.merchant(), "type", e.type().name(), "categoryId", e.categoryId()))
+                .toList();
         List<Map<String, Object>> transactions = items.stream()
                 .map(i -> Map.<String, Object>of("index", i.index(), "description", i.description(),
                         "type", i.type().name()))
                 .toList();
-        return new ImportAiPrompt(CATEGORIES_SYSTEM_PROMPT.formatted(json(categories)),
+        return new ImportAiPrompt(CATEGORIES_SYSTEM_PROMPT.formatted(json(categories), json(examples)),
                 json(Map.of("transactions", transactions)));
     }
 

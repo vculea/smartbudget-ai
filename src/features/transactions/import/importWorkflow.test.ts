@@ -1,9 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import type { TransactionImportAiApi } from "../../../api/contracts";
+import type {
+  CategoryMemoryApi,
+  TransactionImportAiApi,
+} from "../../../api/contracts";
 import { ApiError } from "../../../api/errors";
 import type { Category } from "../../../types";
 import { ImportFileError, type ImportDraft } from "./importParser";
-import { loadImport, suggestMissingCategories } from "./importWorkflow";
+import {
+  loadImport,
+  memoryLessons,
+  rememberedCategories,
+  suggestMissingCategories,
+  type CategoryUpdate,
+} from "./importWorkflow";
 
 const categories: Category[] = [
   { id: "food", name: "Alimente", type: "EXPENSE" },
@@ -212,7 +221,7 @@ describe("suggestMissingCategories", () => {
       { index: 0, categoryId: "food" },
       { index: 1, categoryId: null },
     ]);
-    const updates = new Map<string, { categoryId: string | null }>();
+    const updates = new Map<string, CategoryUpdate>();
 
     const failure = await suggestMissingCategories(
       [
@@ -230,9 +239,9 @@ describe("suggestMissingCategories", () => {
     expect(suggestCategories).toHaveBeenCalledTimes(1);
     expect(suggestCategories.mock.calls[0]?.[0]).toHaveLength(2);
     expect(Object.fromEntries(updates)).toEqual({
-      a: { categoryId: "food" },
-      b: { categoryId: "food" },
-      c: { categoryId: null },
+      a: { categoryId: "food", source: "ai" },
+      b: { categoryId: "food", source: "ai" },
+      c: { categoryId: null, source: "ai" },
     });
   });
 
@@ -257,5 +266,68 @@ describe("suggestMissingCategories", () => {
     );
     expect(failure).toBe("Prea multe cereri.");
     expect(onProgress).not.toHaveBeenCalled();
+  });
+});
+
+const fakeMemory = (
+  overrides: Partial<CategoryMemoryApi> = {},
+): CategoryMemoryApi => ({
+  match: vi.fn().mockResolvedValue([]),
+  learn: vi.fn().mockResolvedValue(undefined),
+  list: vi.fn().mockResolvedValue([]),
+  forget: vi.fn().mockResolvedValue(undefined),
+  forgetAll: vi.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
+
+describe("rememberedCategories", () => {
+  it("cere o singură dată fiecare descriere și întoarce doar ce își amintește", async () => {
+    const match = vi.fn().mockResolvedValue([
+      { index: 0, categoryId: "food" },
+      { index: 1, categoryId: null },
+    ]);
+
+    const updates = await rememberedCategories(
+      [
+        draft("a", "KAUFLAND 12"),
+        draft("b", "kaufland 12"),
+        draft("c", "Necunoscut"),
+        draft("d", "Deja setat", "food"),
+      ],
+      fakeMemory({ match }),
+    );
+
+    expect(match).toHaveBeenCalledTimes(1);
+    expect(match.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(Object.fromEntries(updates)).toEqual({
+      a: { categoryId: "food", source: "memory" },
+      b: { categoryId: "food", source: "memory" },
+    });
+  });
+
+  it("lasă totul pentru AI când memoria nu răspunde", async () => {
+    const updates = await rememberedCategories(
+      [draft("a", "KAUFLAND")],
+      fakeMemory({ match: vi.fn().mockRejectedValue(new ApiError("Oprit.", 503)) }),
+    );
+    expect(updates.size).toBe(0);
+  });
+});
+
+describe("memoryLessons", () => {
+  it("marchează drept corectură doar categoria propusă și schimbată de utilizator", () => {
+    expect(
+      memoryLessons([
+        { ...draft("a", " GLOVO 1 ", "fun"), suggestedCategoryId: "food" },
+        { ...draft("b", "LIDL", "food"), suggestedCategoryId: "food" },
+        draft("c", "Ales de mână", "food"),
+        draft("d", "Fără categorie"),
+        draft("e", "   ", "food"),
+      ]),
+    ).toEqual([
+      { description: "GLOVO 1", type: "EXPENSE", categoryId: "fun", corrected: true },
+      { description: "LIDL", type: "EXPENSE", categoryId: "food", corrected: false },
+      { description: "Ales de mână", type: "EXPENSE", categoryId: "food", corrected: false },
+    ]);
   });
 });

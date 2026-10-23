@@ -32,8 +32,13 @@ export interface ImportDraft {
   description: string;
   transactionDate: string;
   categoryId: string;
-  /** `suggested`: categoria a ales-o AI-ul; `unsure`: AI-ul nu a știut, o alege utilizatorul. */
-  aiState?: "suggested" | "unsure";
+  /**
+   * De unde vine categoria: `remembered` din alegerile anterioare ale utilizatorului, `suggested` de la AI;
+   * `unsure`: nici memoria, nici AI-ul nu au știut, o alege utilizatorul.
+   */
+  aiState?: "remembered" | "suggested" | "unsure";
+  /** Categoria propusă (din memorie sau de AI), ca să se știe la salvare dacă utilizatorul a corectat-o. */
+  suggestedCategoryId?: string;
 }
 
 const normalize = (text: string) =>
@@ -43,6 +48,11 @@ const normalize = (text: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+/** Același tip și aceeași descriere (fără diacritice, majuscule, punctuație): aceeași categorie. */
+export function sameDescriptionKey(draft: Pick<ImportDraft, "type" | "description">) {
+  return `${draft.type}|${normalize(draft.description.trim())}`;
+}
 
 const HEADERS = {
   date: [
@@ -538,7 +548,7 @@ export function categoryBatches(
   for (const draft of drafts) {
     const description = draft.description.trim();
     if (draft.categoryId || !description) continue;
-    const id = `${draft.type}|${normalize(description)}`;
+    const id = sameDescriptionKey(draft);
     const entry = unique.get(id);
     if (entry) entry.keys.push(draft.key);
     else {

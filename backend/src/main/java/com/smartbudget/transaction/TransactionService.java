@@ -2,6 +2,7 @@ package com.smartbudget.transaction;
 
 import com.smartbudget.auth.CurrentUser;
 import com.smartbudget.category.Category;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.common.Money;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +29,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TransactionService {
 
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
+
     static final Set<String> SORTABLE_FIELDS = Set.of("transactionDate", "amount", "createdAt");
     static final int MAX_SEARCH_LENGTH = 100;
 
@@ -34,14 +39,17 @@ public class TransactionService {
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
     private final CurrentUser currentUser;
+    private final CategoryMemoryService memory;
 
     public TransactionService(TransactionRepository repository, CategoryService categoryService,
-                              MongoTemplate mongoTemplate, Clock clock, CurrentUser currentUser) {
+                              MongoTemplate mongoTemplate, Clock clock, CurrentUser currentUser,
+                              CategoryMemoryService memory) {
         this.repository = repository;
         this.categoryService = categoryService;
         this.mongoTemplate = mongoTemplate;
         this.clock = clock;
         this.currentUser = currentUser;
+        this.memory = memory;
     }
 
     public Page<TransactionResponse> list(TransactionFilter filter, Pageable pageable) {
@@ -83,7 +91,9 @@ public class TransactionService {
         Instant now = clock.instant();
         tx.setCreatedAt(now);
         apply(tx, request, now);
-        return toResponse(repository.save(tx), category);
+        Transaction saved = repository.save(tx);
+        remember(saved, false);
+        return toResponse(saved, category);
     }
 
     /** Importă mai multe tranzacții: dacă una singură e invalidă, nu se salvează nimic. */
@@ -116,8 +126,22 @@ public class TransactionService {
     public TransactionResponse update(String id, TransactionRequest request) {
         Transaction tx = find(id);
         Category category = validatedCategory(request);
+        boolean recategorized = !request.categoryId().equals(tx.getCategoryId());
         apply(tx, request, clock.instant());
-        return toResponse(repository.save(tx), category);
+        Transaction saved = repository.save(tx);
+        if (recategorized) {
+            remember(saved, true);
+        }
+        return toResponse(saved, category);
+    }
+
+    /** Teaches the category memory; a failure there must not undo a saved transaction. */
+    private void remember(Transaction tx, boolean corrected) {
+        try {
+            memory.learn(tx.getDescription(), tx.getType(), tx.getCategoryId(), corrected);
+        } catch (RuntimeException ex) {
+            log.warn("Could not update the category memory: {}", ex.getMessage());
+        }
     }
 
     public void delete(String id) {

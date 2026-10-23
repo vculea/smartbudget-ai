@@ -28,13 +28,15 @@ public class CategoryService {
     private final MongoTemplate mongoTemplate;
     private final CurrentUser currentUser;
     private final Clock clock;
+    private final CategoryMemoryService memory;
 
     public CategoryService(CategoryRepository repository, MongoTemplate mongoTemplate, CurrentUser currentUser,
-                           Clock clock) {
+                           Clock clock, CategoryMemoryService memory) {
         this.repository = repository;
         this.mongoTemplate = mongoTemplate;
         this.currentUser = currentUser;
         this.clock = clock;
+        this.memory = memory;
     }
 
     public List<CategoryResponse> list() {
@@ -99,6 +101,7 @@ public class CategoryService {
             }
             moveUsages(category, replacement);
         }
+        memory.moveCategory(category.getUserId(), category.getId(), hasReplacement ? replacementId : null);
         repository.delete(category);
     }
 

@@ -7,6 +7,7 @@ export const queryKeys = {
   transactionList: (query: TransactionQuery) =>
     ["transactions", "list", query] as const,
   categories: ["categories"] as const,
+  categoryMemory: ["category-memory"] as const,
   budgets: ["budgets"] as const,
   budgetList: (period: Period) => ["budgets", period] as const,
   goals: ["goals"] as const,

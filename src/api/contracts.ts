@@ -5,6 +5,7 @@ import type {
   BudgetInput,
   Category,
   CategoryInput,
+  CategoryMemoryLesson,
   CategoryUsage,
   ContributionInput,
   DashboardResponse,
@@ -14,10 +15,12 @@ import type {
   ImportCategorySuggestion,
   ImportColumnMapping,
   Page,
+  RememberedMerchant,
   Transaction,
   TransactionInput,
   TransactionQuery,
   TransactionScan,
+  TransactionType,
   Period,
 } from "../types";
 
@@ -44,6 +47,17 @@ export interface TransactionImportAiApi {
   suggestCategories(
     items: ImportCategoryItem[],
   ): Promise<ImportCategorySuggestion[]>;
+}
+
+/** Ce categorii a ales utilizatorul pentru fiecare comerciant; importul le refolosește înainte de AI. */
+export interface CategoryMemoryApi {
+  /** Categoriile reținute (maxim 1000 de tranzacții); `categoryId: null` = comerciant necunoscut sau nehotărât. */
+  match(items: ImportCategoryItem[]): Promise<ImportCategorySuggestion[]>;
+  /** Reține categoriile păstrate la salvarea importului. */
+  learn(lessons: CategoryMemoryLesson[]): Promise<void>;
+  list(): Promise<RememberedMerchant[]>;
+  forget(type: TransactionType, key: string): Promise<void>;
+  forgetAll(): Promise<void>;
 }
 
 export interface CategoriesApi {

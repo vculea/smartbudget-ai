@@ -106,9 +106,20 @@ Fără `AI_VISION_MODEL` se folosește `AI_MODEL`. Citirea locală durează de o
 1. recunoaște coloanele (data, descrierea, suma sau debit/credit, tipul, categoria, formatul datei și rândul cu antet) din primele rânduri, deci fișierul nu trebuie să respecte un format anume (`POST /transactions/import/columns`);
 2. propune categoria fiecărei tranzacții dintre categoriile tale, pe loturi de 40 de descrieri unice (`POST /transactions/import/categories`). Unde AI-ul nu e sigur, categoria rămâne goală și rândul e marcat „AI-ul nu a știut – alege categoria”; **Adaugă** se activează abia după ce alegi categoria sau debifezi rândul.
 
+Înainte de AI, importul caută în **categoriile învățate** din alegerile tale anterioare (`POST /category-memory/match`); rândurile găsite sunt marcate „Din alegerile tale” și nu mai ajung la AI. Pentru restul, AI-ul primește în prompt și câteva dintre alegerile tale (comercianți înrudiți întâi), ca să-ți urmeze obiceiurile.
+
 Cu modelul local / cheia proprie, backendul construiește prompturile și validează răspunsul (`.../columns|categories/prompt` și `.../result`), ca la citirea bonurilor. Modelul primește doar primele rânduri și descrierile tranzacțiilor. Dacă AI-ul nu răspunde, coloanele se recunosc după titluri (`Data`, `Descriere`, `Suma`/`Debit`/`Credit`, `Tip`, `Categorie`) și categoriile rămân de ales manual; în modul demo nu există model AI, doar o potrivire simplă după comercianți uzuali.
 
-În previzualizare poți corecta data, descrierea, tipul, categoria și suma sau debifa rânduri; **Adaugă N tranzacții** salvează tot printr-un singur apel `POST /transactions/bulk` (totul sau nimic).
+În previzualizare poți corecta data, descrierea, tipul, categoria și suma sau debifa rânduri; categoria aleasă pentru un rând se pune și pe celelalte rânduri cu aceeași descriere pe care nu le-ai ales încă. **Adaugă N tranzacții** salvează tot printr-un singur apel `POST /transactions/bulk` (totul sau nimic).
+
+### Categorii învățate
+
+La salvarea importului, aplicația reține categoria păstrată pentru fiecare comerciant (`POST /category-memory/learn`); la fel când adaugi o tranzacție de mână sau îi schimbi categoria. Comerciantul e identificat după cuvintele din descriere, fără cifre (card, sucursală, terminal), forme juridice (SRL, SA) și cuvinte de plată (POS, Plata la): „KAUFLAND 1234 CLUJ-NAPOCA SRL” devine `kaufland cluj napoca`, iar alte magazine („Kaufland Brașov”) sunt recunoscute după primul cuvânt.
+
+- O categorie este completată automat doar dacă are cel puțin 80% din alegerile tale pentru acel comerciant; dacă îl împarți între categorii (ex. eMAG), alegi tu sau AI-ul.
+- O **corectură** (ai schimbat categoria propusă de memorie sau de AI) înlocuiește ce era reținut: ultima corectură câștigă.
+- La ștergerea unei categorii, alegerile ei trec în categoria înlocuitoare.
+- Pagina **Categorii** arată ce a învățat aplicația și permite ștergerea unei asocieri greșite sau a tuturor (`GET /category-memory`, `DELETE /category-memory?type=&key=`, `DELETE /category-memory/all`).
 
 ## Model AI ales din interfață (Setări AI)
 
@@ -174,7 +185,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `POST /category-memory/{match|learn}`, `GET|DELETE /category-memory` (+ `DELETE /category-memory/all`), `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
 

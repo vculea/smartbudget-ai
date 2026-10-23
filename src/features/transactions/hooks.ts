@@ -4,9 +4,18 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { getErrorMessage, queryKeys, transactionsApi } from "../../api";
+import {
+  categoryMemoryApi,
+  getErrorMessage,
+  queryKeys,
+  transactionsApi,
+} from "../../api";
 import { useToast } from "../../app/useToast";
-import type { TransactionInput, TransactionQuery } from "../../types";
+import type {
+  CategoryMemoryLesson,
+  TransactionInput,
+  TransactionQuery,
+} from "../../types";
 import { prepareImageForUpload } from "../../utils/image";
 
 export function useTransactionsQuery(query: TransactionQuery) {
@@ -17,7 +26,7 @@ export function useTransactionsQuery(query: TransactionQuery) {
   });
 }
 
-/** Tranzacțiile influențează dashboardul și bugetele, deci toate se invalidează. */
+/** Tranzacțiile influențează dashboardul, bugetele și memoria categoriilor, deci toate se invalidează. */
 function useInvalidateFinanceData() {
   const queryClient = useQueryClient();
   return () =>
@@ -25,6 +34,7 @@ function useInvalidateFinanceData() {
       queryClient.invalidateQueries({ queryKey: queryKeys.transactions }),
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboardAll }),
       queryClient.invalidateQueries({ queryKey: queryKeys.budgets }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.categoryMemory }),
     ]);
 }
 
@@ -49,13 +59,27 @@ export function useSaveTransaction() {
   });
 }
 
-/** Salvează tranzacțiile verificate în previzualizarea importului. */
+/**
+ * Salvează tranzacțiile verificate în previzualizarea importului, apoi învață din categoriile păstrate.
+ * Dacă memoria nu poate fi actualizată, importul rămâne reușit.
+ */
 export function useImportTransactions() {
   const invalidate = useInvalidateFinanceData();
   const toast = useToast();
   return useMutation({
-    mutationFn: (inputs: TransactionInput[]) =>
-      transactionsApi.createMany(inputs),
+    mutationFn: async ({
+      inputs,
+      lessons = [],
+    }: {
+      inputs: TransactionInput[];
+      lessons?: CategoryMemoryLesson[];
+    }) => {
+      const result = await transactionsApi.createMany(inputs);
+      if (lessons.length > 0) {
+        await categoryMemoryApi.learn(lessons).catch(() => undefined);
+      }
+      return result;
+    },
     onSuccess: async ({ created }) => {
       await invalidate();
       toast.success(

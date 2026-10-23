@@ -143,6 +143,89 @@ describe("TransactionsImportPage", () => {
     await waitFor(() => expect(improve).toBeEnabled());
   });
 
+  it("reține categoria corectată și o completează singură la importul următor", async () => {
+    const user = userEvent.setup();
+    const file = () =>
+      new File(
+        ["Data;Descriere;Suma\n01.01.2030;MEGA IMAGE 123 CLUJ;-50"],
+        "extras.csv",
+        { type: "text/csv" },
+      );
+    const first = renderImport();
+    await user.upload(screen.getByLabelText("Fișier de importat"), file());
+    const table = await screen.findByRole("table", {
+      name: "Previzualizare import",
+    });
+    const category = within(table).getByRole("combobox", {
+      name: "Categorie rând 2",
+    });
+    await waitFor(() => expect(category).toHaveTextContent("Alimente"));
+
+    await user.click(category);
+    await user.click(await screen.findByRole("option", { name: "Restaurante" }));
+    await user.click(screen.getByRole("button", { name: "Adaugă 1 tranzacție" }));
+    await screen.findByRole(
+      "table",
+      { name: "Lista tranzacțiilor" },
+      { timeout: 3000 },
+    );
+    first.unmount();
+
+    renderImport();
+    await user.upload(screen.getByLabelText("Fișier de importat"), file());
+    const again = await screen.findByRole("table", {
+      name: "Previzualizare import",
+    });
+    await waitFor(() =>
+      expect(
+        within(again).getByRole("combobox", { name: "Categorie rând 2" }),
+      ).toHaveTextContent("Restaurante"),
+    );
+    expect(screen.getByText("Din alegerile tale")).toBeInTheDocument();
+    expect(screen.queryByText("Sugerat de AI")).not.toBeInTheDocument();
+    expect(screen.getByText(/Categorii reținute: 1/)).toBeInTheDocument();
+  });
+
+  it("pune categoria aleasă și pe rândurile cu aceeași descriere", async () => {
+    const user = userEvent.setup();
+    renderImport();
+    await user.upload(
+      screen.getByLabelText("Fișier de importat"),
+      new File(
+        [
+          "Data;Descriere;Suma\n01.01.2030;Plata XYZ 987;-20\n02.01.2030;plata xyz 987;-30\n03.01.2030;Altceva QQ;-5",
+        ],
+        "extras.csv",
+        { type: "text/csv" },
+      ),
+    );
+    const table = await screen.findByRole("table", {
+      name: "Previzualizare import",
+    });
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("AI-ul nu a știut – alege categoria"),
+      ).toHaveLength(3),
+    );
+
+    await user.click(
+      within(table).getByRole("combobox", { name: "Categorie rând 2" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "Transport" }));
+
+    expect(
+      within(table).getByRole("combobox", { name: "Categorie rând 3" }),
+    ).toHaveTextContent("Transport");
+    expect(
+      within(table).getByRole("combobox", { name: "Categorie rând 4" }),
+    ).not.toHaveTextContent("Transport");
+    expect(
+      screen.getByText(
+        "Am pus aceeași categorie și la încă un rând cu aceeași descriere.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("afișează o eroare clară pentru un fișier fără coloanele necesare", async () => {
     const user = userEvent.setup();
     renderImport();

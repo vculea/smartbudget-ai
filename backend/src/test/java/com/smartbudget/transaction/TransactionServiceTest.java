@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.smartbudget.TestClock;
 import com.smartbudget.TestUser;
 import com.smartbudget.category.Category;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
 import java.math.BigDecimal;
@@ -28,11 +29,13 @@ class TransactionServiceTest {
     private final TransactionRepository repository = mock(TransactionRepository.class);
     private final CategoryService categories = mock(CategoryService.class);
     private final MongoTemplate mongoTemplate = mock(MongoTemplate.class);
+    private final CategoryMemoryService memory = mock(CategoryMemoryService.class);
     private TransactionService service;
 
     @BeforeEach
     void setUp() {
-        service = new TransactionService(repository, categories, mongoTemplate, TestClock.FIXED, TestUser.current());
+        service = new TransactionService(repository, categories, mongoTemplate, TestClock.FIXED, TestUser.current(),
+                memory);
         when(repository.save(any(Transaction.class))).thenAnswer(inv -> {
             Transaction tx = inv.getArgument(0);
             if (tx.getId() == null) {
@@ -98,6 +101,38 @@ class TransactionServiceTest {
         assertThat(response.transactionDate()).isEqualTo(LocalDate.of(2026, 10, 5));
         assertThat(response.createdAt()).isEqualTo(java.time.Instant.parse("2026-09-01T00:00:00Z"));
         assertThat(response.updatedAt()).isEqualTo(TestClock.FIXED.instant());
+        verify(memory, never()).learn(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void changingTheCategoryTeachesTheMemoryAsACorrection() {
+        Transaction existing = new Transaction();
+        existing.setId("t1");
+        existing.setType(TransactionType.EXPENSE);
+        existing.setAmount(new BigDecimal("10.00"));
+        existing.setDescription("GLOVO 123");
+        existing.setCategoryId("food");
+        existing.setTransactionDate(LocalDate.of(2026, 9, 1));
+        when(repository.findByIdAndUserId("t1", TestUser.ID)).thenReturn(Optional.of(existing));
+        when(categories.getById("fun")).thenReturn(new Category("fun", "Ieșiri", TransactionType.EXPENSE, null, null));
+
+        service.update("t1", new TransactionRequest(TransactionType.EXPENSE, BigDecimal.TEN, "GLOVO 123",
+                LocalDate.of(2026, 9, 1), "fun"));
+
+        verify(memory).learn("GLOVO 123", TransactionType.EXPENSE, "fun", true);
+    }
+
+    @Test
+    void aMemoryFailureDoesNotFailTheSavedTransaction() {
+        when(categories.getById("food")).thenReturn(new Category("food", "Alimente", TransactionType.EXPENSE, null, null));
+        org.mockito.Mockito.doThrow(new IllegalStateException("down")).when(memory)
+                .learn(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+
+        TransactionResponse response = service.create(new TransactionRequest(TransactionType.EXPENSE, BigDecimal.TEN,
+                "Cafea", LocalDate.of(2026, 10, 3), "food"));
+
+        assertThat(response.id()).isEqualTo("t1");
+        verify(memory).learn("Cafea", TransactionType.EXPENSE, "food", false);
     }
 
     @Test

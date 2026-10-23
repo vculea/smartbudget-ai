@@ -40,6 +40,7 @@ import {
   IMPORT_FILE_ACCEPT,
   ImportFileError,
   MAX_IMPORT_ROWS,
+  sameDescriptionKey,
   toTransactionInput,
   validateDraft,
   type DraftErrors,
@@ -47,6 +48,8 @@ import {
 } from "./importParser";
 import {
   loadImport,
+  memoryLessons,
+  rememberedCategories,
   suggestMissingCategories,
   type CategoryUpdate,
 } from "./importWorkflow";
@@ -119,6 +122,11 @@ export function TransactionsImportPage() {
     total: number;
   } | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [propagated, setPropagated] = useState<string | null>(null);
+  const rowsRef = useRef(rows);
+  useLayoutEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
   // Un import nou sau părăsirea paginii oprește sugestiile AI în curs.
   const runId = useRef(0);
   useEffect(
@@ -144,7 +152,13 @@ export function TransactionsImportPage() {
               : undefined;
             const draft: ImportDraft =
               category && category.type === row.draft.type
-                ? { ...row.draft, categoryId: category.id, aiState: "suggested" }
+                ? {
+                    ...row.draft,
+                    categoryId: category.id,
+                    suggestedCategoryId: category.id,
+                    aiState:
+                      update.source === "memory" ? "remembered" : "suggested",
+                  }
                 : { ...row.draft, aiState: "unsure" };
             return { ...row, draft };
           }) ?? null,
@@ -192,6 +206,7 @@ export function TransactionsImportPage() {
     setError(null);
     setNotice(null);
     setCategoryError(null);
+    setPropagated(null);
     setProgress(null);
     setPhase("reading");
     try {
@@ -203,7 +218,17 @@ export function TransactionsImportPage() {
       setRows(loaded.drafts.map((draft) => ({ draft, included: true })));
       setPhase("idle");
 
-      await runSuggestions(loaded.drafts, id);
+      // Mai întâi alegerile anterioare ale utilizatorului; AI-ul primește doar ce a rămas.
+      const remembered = await rememberedCategories(loaded.drafts);
+      if (id !== runId.current) return;
+      applySuggestions(remembered);
+      await runSuggestions(
+        loaded.drafts.filter((draft) => {
+          const categoryId = remembered.get(draft.key)?.categoryId;
+          return !(categoryId && byId.get(categoryId)?.type === draft.type);
+        }),
+        id,
+      );
     } catch (e) {
       if (id !== runId.current) return;
       setRows(null);
@@ -219,21 +244,50 @@ export function TransactionsImportPage() {
   };
 
   const updateDraft = useCallback(
-    (key: string, patch: Partial<ImportDraft>) =>
-      setRows((current) =>
-        current?.map((row) => {
-          if (row.draft.key !== key) return row;
-          const draft = { ...row.draft, ...patch };
-          // O categorie care nu aparține noului tip se golește.
-          if (patch.type && byId.get(draft.categoryId)?.type !== patch.type) {
-            draft.categoryId = "";
-          }
-          if (patch.type || patch.categoryId !== undefined) {
-            delete draft.aiState;
-          }
-          return { ...row, draft };
-        }) ?? null,
-      ),
+    (key: string, patch: Partial<ImportDraft>) => {
+      const current = rowsRef.current ?? [];
+      const changed = current.find((row) => row.draft.key === key)?.draft;
+      // O categorie aleasă de mână se aplică și rândurilor cu aceeași descriere pe care utilizatorul nu le-a ales încă.
+      const sameKey =
+        changed && patch.categoryId && !patch.type
+          ? sameDescriptionKey(changed)
+          : null;
+      const follows = (draft: ImportDraft) =>
+        sameKey !== null &&
+        draft.key !== key &&
+        draft.categoryId !== patch.categoryId &&
+        (draft.aiState !== undefined || !draft.categoryId) &&
+        sameDescriptionKey(draft) === sameKey;
+      const followers = current.filter((row) => follows(row.draft)).length;
+
+      setRows(
+        (rows) =>
+          rows?.map((row) => {
+            if (row.draft.key !== key) {
+              if (!follows(row.draft)) return row;
+              const draft = { ...row.draft, categoryId: patch.categoryId! };
+              delete draft.aiState;
+              return { ...row, draft };
+            }
+            const draft = { ...row.draft, ...patch };
+            // O categorie care nu aparține noului tip se golește.
+            if (patch.type && byId.get(draft.categoryId)?.type !== patch.type) {
+              draft.categoryId = "";
+            }
+            if (patch.type || patch.categoryId !== undefined) {
+              delete draft.aiState;
+            }
+            return { ...row, draft };
+          }) ?? null,
+      );
+      if (followers > 0) {
+        setPropagated(
+          followers === 1
+            ? "Am pus aceeași categorie și la încă un rând cu aceeași descriere."
+            : `Am pus aceeași categorie și la alte ${followers} rânduri cu aceeași descriere.`,
+        );
+      }
+    },
     [byId],
   );
 
@@ -272,6 +326,9 @@ export function TransactionsImportPage() {
     return { income, expense };
   }, [selected]);
 
+  const remembered = selected.filter(
+    (r) => r.draft.aiState === "remembered",
+  ).length;
   const aiPicked = selected.filter((r) => r.draft.aiState === "suggested").length;
   const aiUnsure = selected.filter((r) => r.draft.aiState === "unsure").length;
   const categorizing = progress !== null;
@@ -284,10 +341,12 @@ export function TransactionsImportPage() {
     !importMutation.isPending;
 
   const save = async () => {
+    const drafts = selected.map((row) => row.draft);
     try {
-      await importMutation.mutateAsync(
-        selected.map((row) => toTransactionInput(row.draft)),
-      );
+      await importMutation.mutateAsync({
+        inputs: drafts.map(toTransactionInput),
+        lessons: memoryLessons(drafts),
+      });
       navigate("/transactions");
     } catch {
       // Eroarea este afișată prin toast din hook.
@@ -345,6 +404,7 @@ export function TransactionsImportPage() {
               <Typography variant="body2" color="text.secondary">
                 Coloane recunoscute{" "}
                 {mappingSource === "ai" ? "de AI" : "după titluri"}
+                {remembered > 0 && ` · Categorii reținute: ${remembered}`}
                 {aiPicked + aiUnsure > 0 &&
                   ` · Categorii alese de AI: ${aiPicked} · De ales de tine: ${aiUnsure}`}
               </Typography>
@@ -387,6 +447,15 @@ export function TransactionsImportPage() {
           {notice && (
             <Alert severity="info" sx={{ mx: 2, mb: 2 }}>
               {notice}
+            </Alert>
+          )}
+          {propagated && (
+            <Alert
+              severity="info"
+              sx={{ mx: 2, mb: 2 }}
+              onClose={() => setPropagated(null)}
+            >
+              {propagated}
             </Alert>
           )}
           {categoryError && (
@@ -536,8 +605,10 @@ function UploadCard({
             de rânduri. AI-ul ales în Setări AI recunoaște coloanele (data,
             descrierea, suma, tipul) și propune categoria fiecărei tranzacții;
             unde nu e sigur, rândul rămâne marcat ca să alegi tu categoria. Poți
-            corecta totul în pasul următor, înainte de salvare. Descrierile
-            tranzacțiilor sunt trimise modelului AI ales.
+            corecta totul în pasul următor, înainte de salvare. Categoriile pe
+            care le păstrezi sau le corectezi sunt reținute și completate singure
+            la importurile următoare. Descrierile tranzacțiilor sunt trimise
+            modelului AI ales.
           </Typography>
         </Stack>
       </Box>
@@ -635,7 +706,16 @@ const PreviewTableRow = memo(function PreviewTableRow({
           value={draft.categoryId}
           error={!!show(errors.categoryId)}
           helperText={
-            draft.aiState === "suggested" ? (
+            draft.aiState === "remembered" ? (
+              <Chip
+                component="span"
+                size="small"
+                color="success"
+                variant="outlined"
+                label="Din alegerile tale"
+                sx={{ height: 20 }}
+              />
+            ) : draft.aiState === "suggested" ? (
               <Chip
                 component="span"
                 size="small"

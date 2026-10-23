@@ -1,3 +1,4 @@
+import { forgetMemory } from "./categoryMemory";
 import { DB_VERSION, createSeed, type DemoDb } from "./seed";
 
 const STORAGE_KEY = "smartbudget.demo.db";
@@ -39,4 +40,5 @@ export function saveDb(db: DemoDb): void {
 
 export function resetDemoData(): void {
   saveDb(createSeed());
+  forgetMemory();
 }
