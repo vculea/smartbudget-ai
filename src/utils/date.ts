@@ -89,13 +89,16 @@ export function periodParams(
   return isYearPeriod(period) ? { year: Number(period) } : { month: period };
 }
 
+/** Formatează o dată ca `DD-Lun-YYYY` (ex. `20-Oct-2026`), la fel ca input-ul de dată. */
 export function formatDate(iso: IsoDate): string {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Intl.DateTimeFormat(LOCALE, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  const date = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+  const month = capitalize(
+    new Intl.DateTimeFormat(LOCALE, { month: "short" })
+      .format(date)
+      .replace(".", ""),
+  );
+  return `${pad(date.getDate())}-${month}-${date.getFullYear()}`;
 }
 
 /** Numărul de zile până la o dată (negativ dacă a trecut). */
