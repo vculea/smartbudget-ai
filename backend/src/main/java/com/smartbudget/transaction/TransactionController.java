@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import com.smartbudget.ai.ReceiptScan;
+import com.smartbudget.ai.ReceiptScanResult;
 import com.smartbudget.common.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -37,12 +37,14 @@ public class TransactionController {
     }
 
     @PostMapping(value = "/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Propose a transaction from a receipt photo",
+    @Operation(summary = "Propose transactions from a receipt or statement photo",
             description = "Multipart field 'image' (JPEG, PNG or WebP, max 8 MB). The AI reads the amount, date, description and "
-                    + "picks one of the existing categories. Nothing is saved: the client reviews the values and then calls POST /transactions. "
+                    + "picks one of the existing categories. Returns {transactions: [...]}: one entry for a receipt or invoice, "
+                    + "several for a statement or a list of payments. Nothing is saved: the client reviews the values and then "
+                    + "calls POST /transactions or POST /transactions/bulk. "
                     + "amount and categoryId may be null when unreadable. Errors: 413 too large, 415 not an image, "
                     + "422 nothing recognized, 429/502/503/504 AI provider problems.")
-    public ReceiptScan scan(@RequestPart("image") MultipartFile image) {
+    public ReceiptScanResult scan(@RequestPart("image") MultipartFile image) {
         return scanService.scan(image);
     }
 

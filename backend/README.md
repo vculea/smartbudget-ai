@@ -127,7 +127,7 @@ Interactive documentation: Swagger UI (use *Authorize* with the token returned b
 | GET | `/transactions/{id}` | 404 if missing |
 | POST / PUT | `/transactions`, `/transactions/{id}` | 201 / 200; category must exist and match the transaction type (422 otherwise) |
 | DELETE | `/transactions/{id}` | 204 |
-| POST | `/transactions/scan` | multipart field `image` (JPEG/PNG/WebP, ≤ 8 MB, type checked from the file signature). The vision model reads amount, date, description and picks an existing category; returns `{ type, amount, description, transactionDate, categoryId }` (`amount`/`categoryId` may be `null`) **without saving**; the client reviews it and calls `POST /transactions`. 413 / 415 / 422 (nothing recognized) / 429 / 502 / 503 / 504 |
+| POST | `/transactions/scan` | multipart field `image` (JPEG/PNG/WebP, ≤ 8 MB, type checked from the file signature). The vision model reads amount, date, description and picks an existing category; returns `{ transactions: [{ type, amount, description, transactionDate, categoryId }] }` — one entry for a receipt/invoice, several (max 30) for a statement or a list of payments (`amount`/`categoryId` may be `null`) — **without saving**; the client reviews them and calls `POST /transactions` or `POST /transactions/bulk`. 413 / 415 / 422 (nothing recognized) / 429 / 502 / 503 / 504 |
 | GET | `/categories` | the caller's categories, sorted by type and name |
 | POST / PUT | `/categories`, `/categories/{id}` | 201 / 200; body `{ name, type, color?, icon? }`; 409 if the name already exists for that type (case-insensitive) or if the type changes while transactions/budgets use the category |
 | GET | `/categories/{id}/usage` | `{ transactions, budgets }` using the category |

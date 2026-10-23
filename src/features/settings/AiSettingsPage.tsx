@@ -141,12 +141,12 @@ function EndpointFields({
         )}
       />
       <TextField
-        label="Timp maxim de așteptare (secunde)"
+        label="Timp maxim fără răspuns (secunde)"
         type="number"
         value={timeoutText}
         onChange={(event) => onTimeoutChange(event.target.value)}
         error={!timeoutValid}
-        helperText={`Între ${MIN_TIMEOUT_SECONDS} și ${MAX_TIMEOUT_SECONDS}.`}
+        helperText={`Cât aștepți ca modelul să înceapă sau să continue răspunsul. Între ${MIN_TIMEOUT_SECONDS} și ${MAX_TIMEOUT_SECONDS}.`}
         slotProps={{
           htmlInput: { min: MIN_TIMEOUT_SECONDS, max: MAX_TIMEOUT_SECONDS },
         }}

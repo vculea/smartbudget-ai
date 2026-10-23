@@ -1,6 +1,6 @@
 package com.smartbudget.transaction;
 
-import com.smartbudget.ai.ReceiptScan;
+import com.smartbudget.ai.ReceiptScanResult;
 import com.smartbudget.ai.ReceiptScanner;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Turns an uploaded receipt photo into a proposed (unsaved) transaction. */
+/** Turns an uploaded receipt / statement photo into proposed (unsaved) transactions. */
 @Service
 public class TransactionScanService {
 
@@ -27,7 +27,7 @@ public class TransactionScanService {
         this.clock = clock;
     }
 
-    public ReceiptScan scan(MultipartFile file) {
+    public ReceiptScanResult scan(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw ApiException.badRequest("Imaginea este obligatorie.");
         }

@@ -17,6 +17,7 @@ import type {
   ImportExistingItem,
   Page,
   RememberedMerchant,
+  ScanOptions,
   Transaction,
   TransactionInput,
   TransactionQuery,
@@ -42,8 +43,8 @@ export interface TransactionsApi {
   findExisting(items: ImportExistingItem[]): Promise<number[]>;
   update(id: string, input: TransactionInput): Promise<Transaction>;
   remove(id: string): Promise<void>;
-  /** Trimite poza unui bon către AI și întoarce tranzacția propusă (nesalvată). */
-  scan(image: Blob): Promise<TransactionScan>;
+  /** Trimite poza unui bon / extras către AI și întoarce tranzacțiile propuse (nesalvate, cel puțin una). */
+  scan(image: Blob, options?: ScanOptions): Promise<TransactionScan[]>;
 }
 
 export interface TransactionImportAiApi {

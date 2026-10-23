@@ -354,13 +354,15 @@ export const mockTransactionsApi: TransactionsApi = {
     const category =
       db.categories.find((c) => c.id === CATEGORY.groceries) ??
       db.categories.find((c) => c.type === "EXPENSE");
-    return {
-      type: "EXPENSE",
-      amount: 87.5,
-      description: "Bon exemplu (mod demo) - cumpărături",
-      transactionDate: todayIso(),
-      categoryId: category?.id ?? null,
-    };
+    return [
+      {
+        type: "EXPENSE",
+        amount: 87.5,
+        description: "Bon exemplu (mod demo) - cumpărături",
+        transactionDate: todayIso(),
+        categoryId: category?.id ?? null,
+      },
+    ];
   },
 };
 

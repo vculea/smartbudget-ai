@@ -1,7 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { transactionsApi } from "../../api";
+import { CATEGORY } from "../../mocks/seed";
 import { renderWithProviders } from "../../test/renderWithProviders";
+import { todayIso } from "../../utils/date";
 import { TransactionsPage } from "./TransactionsPage";
 
 const findTable = () =>
@@ -120,6 +123,74 @@ describe("TransactionsPage", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     expect(await screen.findByText("Bon scanat corectat")).toBeInTheDocument();
+  });
+
+  it("din poza cu mai multe tranzacții le salvează deodată pe cele bifate", async () => {
+    const scanSpy = vi.spyOn(transactionsApi, "scan").mockResolvedValue([
+      {
+        type: "EXPENSE",
+        amount: 45.9,
+        description: "Extras Lidl",
+        transactionDate: todayIso(),
+        categoryId: CATEGORY.groceries,
+      },
+      {
+        type: "EXPENSE",
+        amount: null,
+        description: "Extras necitit",
+        transactionDate: todayIso(),
+        categoryId: null,
+      },
+      {
+        type: "EXPENSE",
+        amount: 12,
+        description: "Extras cafea",
+        transactionDate: todayIso(),
+        categoryId: CATEGORY.groceries,
+      },
+    ]);
+    try {
+      const user = userEvent.setup();
+      renderWithProviders(<TransactionsPage />);
+      await findTable();
+
+      await user.click(screen.getByRole("button", { name: "Adaugă tranzacție" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Tranzacție nouă",
+      });
+      await user.upload(
+        within(dialog).getByTestId("receipt-input"),
+        new File(["x"], "extras.jpg", { type: "image/jpeg" }),
+      );
+
+      expect(
+        await within(dialog).findAllByTestId("scanned-transaction", undefined, {
+          timeout: 3000,
+        }),
+      ).toHaveLength(3);
+      await user.click(
+        within(dialog).getByRole("button", { name: "Adaugă 3 tranzacții" }),
+      );
+      const second = within(dialog).getByRole("group", { name: "Tranzacția 2" });
+      expect(within(second).getByText("Introdu suma")).toBeInTheDocument();
+      expect(within(second).getByText("Alege categoria")).toBeInTheDocument();
+
+      await user.click(
+        within(second).getByRole("checkbox", { name: "Salvează Tranzacția 2" }),
+      );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Adaugă 2 tranzacții" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(await screen.findByText("Extras Lidl")).toBeInTheDocument();
+      expect(screen.getByText("Extras cafea")).toBeInTheDocument();
+      expect(screen.queryByText("Extras necitit")).not.toBeInTheDocument();
+    } finally {
+      scanSpy.mockRestore();
+    }
   });
 
   it("cere confirmare înainte de ștergere și elimină tranzacția", async () => {

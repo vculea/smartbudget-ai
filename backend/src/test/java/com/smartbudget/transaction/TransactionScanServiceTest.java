@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
 import com.smartbudget.ai.ReceiptScan;
+import com.smartbudget.ai.ReceiptScanResult;
 import com.smartbudget.ai.ReceiptScanner;
 import com.smartbudget.category.CategoryResponse;
 import com.smartbudget.category.CategoryService;
@@ -42,12 +43,12 @@ class TransactionScanServiceTest {
     @Test
     void detectsRealImageTypeIgnoringDeclaredContentType() {
         List<CategoryResponse> list = List.of();
-        ReceiptScan expected = new ReceiptScan(TransactionType.EXPENSE, new BigDecimal("10.00"), "x",
-                LocalDate.of(2026, 10, 22), null);
+        ReceiptScanResult expected = new ReceiptScanResult(List.of(new ReceiptScan(TransactionType.EXPENSE,
+                new BigDecimal("10.00"), "x", LocalDate.of(2026, 10, 22), null)));
         when(categories.list()).thenReturn(list);
         when(scanner.scan(any(), any(), any(), any())).thenReturn(expected);
 
-        ReceiptScan result = service.scan(new MockMultipartFile("image", "bon.txt", "text/plain", JPEG));
+        ReceiptScanResult result = service.scan(new MockMultipartFile("image", "bon.txt", "text/plain", JPEG));
 
         assertThat(result).isSameAs(expected);
         verify(scanner).scan(JPEG, "image/jpeg", list, LocalDate.of(2026, 10, 22));

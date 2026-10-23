@@ -47,6 +47,32 @@ function modelAnswer(content: unknown, ok = true) {
   );
 }
 
+/** Răspuns în flux (SSE); fiecare element ajunge ca o bucată separată. */
+function sseResponse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)));
+      controller.close();
+    },
+  });
+  return new Response(body, {
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+/** Un model care nu răspunde deloc; cererea se termină doar la anulare. */
+function hangingFetch() {
+  return vi.fn(
+    (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      }),
+  );
+}
+
 beforeEach(() => {
   backendCalls = [];
   saveAiSettings({
@@ -131,28 +157,113 @@ describe("AI local apelat din browser", () => {
     mockBackend({
       "GET /ai/local/receipt/prompt": { systemPrompt: "bon", userText: "citește" },
       "POST /ai/local/receipt/result": {
-        type: "EXPENSE",
-        amount: 12.5,
-        description: "Lidl",
-        transactionDate: "2026-10-20",
-        categoryId: null,
+        transactions: [
+          {
+            type: "EXPENSE",
+            amount: 12.5,
+            description: "Lidl",
+            transactionDate: "2026-10-20",
+            categoryId: null,
+          },
+        ],
       },
     });
     const fetchMock = modelAnswer("{}");
     vi.stubGlobal("fetch", fetchMock);
 
-    const scan = await localScanTransaction(
+    const scans = await localScanTransaction(
       new Blob(["abc"], { type: "image/png" }),
     );
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const sent = JSON.parse(init.body as string);
     expect(sent.model).toBe("v1");
+    expect(sent.stream).toBe(true);
     expect(sent.messages[1].content[0]).toEqual({ type: "text", text: "citește" });
     expect(sent.messages[1].content[1].image_url.url).toMatch(
       /^data:image\/png;base64,/,
     );
-    expect(scan.amount).toBe(12.5);
+    expect(scans).toHaveLength(1);
+    expect(scans[0]?.amount).toBe(12.5);
+  });
+
+  it("citește răspunsul în flux și raportează progresul", async () => {
+    mockBackend({
+      "GET /ai/local/receipt/prompt": { systemPrompt: "bon", userText: "citește" },
+      "POST /ai/local/receipt/result": { transactions: [] },
+    });
+    const events = [
+      'data: {"choices":[{"delta":{"reasoning":"hmm"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"{\\"transactions\\""}}]}\n\ndata: {"choices":[{"delta":',
+      '{"content":":[]}"}}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => sseResponse(events)),
+    );
+    const onProgress = vi.fn();
+
+    await localScanTransaction(new Blob(["abc"], { type: "image/png" }), {
+      onProgress,
+    });
+
+    expect(backendCalls[1]?.body).toEqual({ content: '{"transactions":[]}' });
+    expect(onProgress.mock.calls.map(([p]) => p.phase)).toEqual([
+      "waiting",
+      "thinking",
+      "writing",
+      "writing",
+    ]);
+    expect(onProgress).toHaveBeenLastCalledWith({
+      phase: "writing",
+      receivedChars: 19,
+    });
+  });
+
+  it("oprește cererea doar când modelul nu mai trimite nimic", async () => {
+    saveAiSettings({
+      ...DEFAULT_AI_SETTINGS,
+      mode: "local",
+      local: { ...DEFAULT_LOCAL_AI_SETTINGS, timeoutSeconds: 30 },
+    });
+    mockBackend({
+      "GET /ai/local/receipt/prompt": { systemPrompt: "s", userText: "u" },
+    });
+    const fetchMock = hangingFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const failure = localScanTransaction(new Blob(["a"], { type: "image/png" }));
+      const assertion = expect(failure).rejects.toThrow(
+        /nu a trimis nimic timp de 30 de secunde/,
+      );
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("anulează citirea la cererea utilizatorului", async () => {
+    mockBackend({
+      "GET /ai/local/receipt/prompt": { systemPrompt: "s", userText: "u" },
+    });
+    const fetchMock = hangingFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    const failure = localScanTransaction(new Blob(["a"], { type: "image/png" }), {
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(failure).rejects.toThrow("Citirea a fost anulată.");
+    expect(backendCalls).toHaveLength(1);
   });
 
   it("explică lipsa conexiunii la modelul local", async () => {

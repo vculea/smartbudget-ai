@@ -55,11 +55,13 @@ class OpenAiCompatibleReceiptScannerTest {
                 .andExpect(jsonPath("$.messages[1].content[1].image_url.url")
                         .value(org.hamcrest.Matchers.startsWith("data:image/png;base64,")))
                 .andRespond(withSuccess(completion("""
-                        {"type":"EXPENSE","amount":87.5,"description":"Kaufland - cumpărături",
-                         "transactionDate":"2026-10-20","categoryId":"food"}"""), MediaType.APPLICATION_JSON));
+                        {"transactions":[{"type":"EXPENSE","amount":87.5,"description":"Kaufland - cumpărături",
+                         "transactionDate":"2026-10-20","categoryId":"food"}]}"""), MediaType.APPLICATION_JSON));
 
-        ReceiptScan scan = scanner.scan(new byte[] {1, 2, 3}, "image/png", CATEGORIES, TODAY);
+        List<ReceiptScan> scans = scanner.scan(new byte[] {1, 2, 3}, "image/png", CATEGORIES, TODAY).transactions();
 
+        assertThat(scans).hasSize(1);
+        ReceiptScan scan = scans.get(0);
         assertThat(scan.type()).isEqualTo(TransactionType.EXPENSE);
         assertThat(scan.amount()).isEqualByComparingTo("87.50");
         assertThat(scan.description()).isEqualTo("Kaufland - cumpărături");
@@ -69,19 +71,50 @@ class OpenAiCompatibleReceiptScannerTest {
     }
 
     @Test
+    void readsSeveralTransactionsAndDropsUnrecognizableEntries() {
+        List<ReceiptScan> scans = scanner.parse("""
+                {"transactions":[
+                  {"type":"EXPENSE","amount":"45,90","description":"Lidl","transactionDate":"2026-10-20","categoryId":"food"},
+                  {"amount":null,"description":""},
+                  "text",
+                  {"type":"INCOME","amount":5000,"description":"Salariu","transactionDate":"2026-10-15","categoryId":"salary"}
+                ]}""", CATEGORIES, TODAY).transactions();
+
+        assertThat(scans).extracting(ReceiptScan::description).containsExactly("Lidl", "Salariu");
+        assertThat(scans.get(0).amount()).isEqualByComparingTo("45.90");
+        assertThat(scans.get(1).type()).isEqualTo(TransactionType.INCOME);
+        assertThat(scans.get(1).categoryId()).isEqualTo("salary");
+    }
+
+    @Test
+    void acceptsASingleObjectOrABareArray() {
+        assertThat(scanner.parse("{\"amount\":10,\"description\":\"x\"}", CATEGORIES, TODAY).transactions())
+                .hasSize(1);
+        assertThat(scanner.parse("[{\"amount\":1},{\"amount\":2}]", CATEGORIES, TODAY).transactions())
+                .hasSize(2);
+    }
+
+    @Test
+    void keepsAtMostTheMaximumNumberOfTransactions() {
+        String entries = String.join(",", java.util.Collections.nCopies(
+                OpenAiCompatibleReceiptScanner.MAX_TRANSACTIONS + 5, "{\"amount\":1,\"description\":\"x\"}"));
+
+        assertThat(scanner.parse("{\"transactions\":[" + entries + "]}", CATEGORIES, TODAY).transactions())
+                .hasSize(OpenAiCompatibleReceiptScanner.MAX_TRANSACTIONS);
+    }
+
+    @Test
     void unknownCategoryIsDroppedInsteadOfTrustingTheModel() {
-        ReceiptScan scan = scanner.parse("""
-                {"type":"EXPENSE","amount":10,"description":"x","transactionDate":"2026-10-20","categoryId":"invented"}""",
-                CATEGORIES, TODAY);
+        ReceiptScan scan = one("""
+                {"type":"EXPENSE","amount":10,"description":"x","transactionDate":"2026-10-20","categoryId":"invented"}""");
 
         assertThat(scan.categoryId()).isNull();
     }
 
     @Test
     void categoryOfTheOtherTypeIsDropped() {
-        ReceiptScan scan = scanner.parse("""
-                {"type":"EXPENSE","amount":10,"description":"x","transactionDate":"2026-10-20","categoryId":"salary"}""",
-                CATEGORIES, TODAY);
+        ReceiptScan scan = one("""
+                {"type":"EXPENSE","amount":10,"description":"x","transactionDate":"2026-10-20","categoryId":"salary"}""");
 
         assertThat(scan.type()).isEqualTo(TransactionType.EXPENSE);
         assertThat(scan.categoryId()).isNull();
@@ -89,26 +122,23 @@ class OpenAiCompatibleReceiptScannerTest {
 
     @Test
     void missingTypeIsInferredFromTheCategory() {
-        ReceiptScan scan = scanner.parse("""
-                {"amount":5000,"description":"Salariu","categoryId":"salary"}""", CATEGORIES, TODAY);
+        ReceiptScan scan = one("""
+                {"amount":5000,"description":"Salariu","categoryId":"salary"}""");
 
         assertThat(scan.type()).isEqualTo(TransactionType.INCOME);
     }
 
     @Test
     void futureOrUnreadableDateFallsBackToToday() {
-        assertThat(scanner.parse("{\"amount\":1,\"transactionDate\":\"2027-01-01\"}", CATEGORIES, TODAY).transactionDate())
-                .isEqualTo(TODAY);
-        assertThat(scanner.parse("{\"amount\":1,\"transactionDate\":\"azi\"}", CATEGORIES, TODAY).transactionDate())
-                .isEqualTo(TODAY);
-        assertThat(scanner.parse("{\"amount\":1,\"transactionDate\":null}", CATEGORIES, TODAY).transactionDate())
-                .isEqualTo(TODAY);
+        assertThat(one("{\"amount\":1,\"transactionDate\":\"2027-01-01\"}").transactionDate()).isEqualTo(TODAY);
+        assertThat(one("{\"amount\":1,\"transactionDate\":\"azi\"}").transactionDate()).isEqualTo(TODAY);
+        assertThat(one("{\"amount\":1,\"transactionDate\":null}").transactionDate()).isEqualTo(TODAY);
     }
 
     @Test
     void invalidAmountsBecomeNullButDescriptionIsKept() {
         for (String amount : List.of("-5", "0", "\"abc\"", "null", "99999999999")) {
-            ReceiptScan scan = scanner.parse("{\"amount\":" + amount + ",\"description\":\"Cafea\"}", CATEGORIES, TODAY);
+            ReceiptScan scan = one("{\"amount\":" + amount + ",\"description\":\"Cafea\"}");
             assertThat(scan.amount()).as(amount).isNull();
             assertThat(scan.description()).isEqualTo("Cafea");
         }
@@ -126,7 +156,7 @@ class OpenAiCompatibleReceiptScannerTest {
 
     @Test
     void amountIsRoundedToTwoDecimalsAndDescriptionIsCleaned() {
-        ReceiptScan scan = scanner.parse("{\"amount\":12.999,\"description\":\"  a\\n\\tb  \"}", CATEGORIES, TODAY);
+        ReceiptScan scan = one("{\"amount\":12.999,\"description\":\"  a\\n\\tb  \"}");
 
         assertThat(scan.amount()).isEqualByComparingTo(new BigDecimal("13.00"));
         assertThat(scan.description()).isEqualTo("a b");
@@ -134,9 +164,12 @@ class OpenAiCompatibleReceiptScannerTest {
 
     @Test
     void nothingRecognizedIsUnprocessable() {
-        assertThatThrownBy(() -> scanner.parse("{\"amount\":null,\"description\":\"\"}", CATEGORIES, TODAY))
-                .isInstanceOfSatisfying(ApiException.class,
-                        ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+        for (String content : List.of("{\"amount\":null,\"description\":\"\"}", "{\"transactions\":[]}")) {
+            assertThatThrownBy(() -> scanner.parse(content, CATEGORIES, TODAY))
+                    .as(content)
+                    .isInstanceOfSatisfying(ApiException.class,
+                            ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
+        }
     }
 
     @Test
@@ -148,7 +181,7 @@ class OpenAiCompatibleReceiptScannerTest {
 
     @Test
     void acceptsAnswerWrappedInCodeFence() {
-        ReceiptScan scan = scanner.parse("```json\n{\"amount\":3.2,\"description\":\"Apa\"}\n```", CATEGORIES, TODAY);
+        ReceiptScan scan = one("```json\n{\"amount\":3.2,\"description\":\"Apa\"}\n```");
 
         assertThat(scan.amount()).isEqualByComparingTo("3.20");
     }
@@ -173,6 +206,12 @@ class OpenAiCompatibleReceiptScannerTest {
                 .isInstanceOfSatisfying(ApiException.class,
                         ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
         noCalls.verify();
+    }
+
+    private ReceiptScan one(String content) {
+        List<ReceiptScan> scans = scanner.parse(content, CATEGORIES, TODAY).transactions();
+        assertThat(scans).hasSize(1);
+        return scans.get(0);
     }
 
     private static AiProperties properties(String key) {

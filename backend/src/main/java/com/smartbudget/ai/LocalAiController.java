@@ -44,8 +44,8 @@ public class LocalAiController {
 
     @PostMapping("/receipt/result")
     @Operation(summary = "Validates the receipt answer of a vision model run by the browser",
-            description = "Errors: 422 nothing recognizable, 502 invalid AI answer.")
-    public ReceiptScan receiptResult(@Valid @RequestBody LocalReceiptResultRequest request) {
+            description = "Returns {transactions: [...]}. Errors: 422 nothing recognizable, 502 invalid AI answer.")
+    public ReceiptScanResult receiptResult(@Valid @RequestBody LocalReceiptResultRequest request) {
         return service.receiptResult(request.content());
     }
 }

@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogTitle,
   InputAdornment,
+  LinearProgress,
   MenuItem,
   Stack,
   TextField,
@@ -20,6 +21,7 @@ import { z } from "zod";
 import { ApiError, getErrorMessage } from "../../api";
 import { useAiSettings } from "../../config/aiSettings";
 import type {
+  ScanProgress,
   Transaction,
   TransactionScan,
   TransactionType,
@@ -34,8 +36,29 @@ import {
 } from "../../utils/validation";
 import { useCategories } from "../categories/useCategories";
 import { useSaveTransaction, useScanTransaction } from "./hooks";
+import { ScannedTransactionsReview } from "./ScannedTransactionsReview";
 
 const DESCRIPTION_MAX = 120;
+
+function scanProgressText(progress: ScanProgress | null, local: boolean): string {
+  switch (progress?.phase) {
+    case "writing":
+      return `Modelul scrie răspunsul: ${progress.receivedChars} caractere primite`;
+    case "thinking":
+      return "Modelul analizează conținutul pozei";
+    case "waiting":
+      return local
+        ? "Modelul local se încarcă și citește poza; la prima folosire poate dura câteva minute"
+        : "AI-ul citește poza";
+    default:
+      return "Se pregătește poza pentru AI";
+  }
+}
+
+function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
 
 const schema = z.object({
   type: z.enum(["INCOME", "EXPENSE"]),
@@ -92,7 +115,21 @@ function TransactionForm({
   const scan = useScanTransaction();
   const aiMode = useAiSettings().mode;
   const fileInput = useRef<HTMLInputElement>(null);
+  const scanAbort = useRef<AbortController | null>(null);
   const [scanned, setScanned] = useState<TransactionScan | null>(null);
+  const [review, setReview] = useState<TransactionScan[] | null>(null);
+  const [progress, setProgress] = useState<ScanProgress | null>(null);
+  const [scanStartedAt, setScanStartedAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Închiderea dialogului oprește și citirea în curs (modelul local nu mai lucrează degeaba).
+  useEffect(() => () => scanAbort.current?.abort(), []);
+
+  useEffect(() => {
+    if (!scan.isPending) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [scan.isPending]);
 
   const {
     control,
@@ -130,8 +167,29 @@ function TransactionForm({
   const handleFileSelected = async (file: File | undefined) => {
     if (!file) return;
     setScanned(null);
+    setProgress(null);
+    scanAbort.current?.abort();
+    const controller = new AbortController();
+    scanAbort.current = controller;
+    setScanStartedAt(Date.now());
+    setNow(Date.now());
     try {
-      const result = await scan.mutateAsync(file);
+      const results = await scan.mutateAsync({
+        image: file,
+        options: {
+          signal: controller.signal,
+          onProgress: (next) => {
+            if (!controller.signal.aborted) setProgress(next);
+          },
+        },
+      });
+      if (controller.signal.aborted) return;
+      if (results.length > 1) {
+        setReview(results);
+        return;
+      }
+      const result = results[0];
+      if (!result) return;
       const options = { shouldValidate: true, shouldDirty: true };
       setValue("type", result.type, options);
       if (result.amount !== null) setValue("amount", String(result.amount), options);
@@ -144,6 +202,13 @@ function TransactionForm({
     } catch {
       // Eroarea este afișată din starea mutației.
     }
+  };
+
+  const cancelScan = () => {
+    scanAbort.current?.abort();
+    scanAbort.current = null;
+    setProgress(null);
+    scan.reset();
   };
 
   const onSubmit = handleSubmit(async (values) => {
@@ -168,6 +233,20 @@ function TransactionForm({
       }
     }
   });
+
+  if (review) {
+    return (
+      <ScannedTransactionsReview
+        scans={review}
+        categories={categories}
+        categoriesLoading={categoriesLoading}
+        onBack={() => setReview(null)}
+        onSaved={onClose}
+      />
+    );
+  }
+
+  const elapsed = Math.max(0, Math.round((now - scanStartedAt) / 1000));
 
   return (
     <form onSubmit={onSubmit} noValidate>
@@ -206,10 +285,22 @@ function TransactionForm({
                   : "Completează din poză sau PDF (bon, factură)"}
               </Button>
               {scan.isPending && (
-                <Alert severity="info" data-testid="scan-ai-notice">
-                  Scanarea se face cu AI.
-                  {aiMode === "local" &&
-                    " Fiind folosit un model AI local, citirea poate dura mai mult."}
+                <Alert
+                  severity="info"
+                  data-testid="scan-ai-notice"
+                  action={
+                    <Button color="inherit" size="small" onClick={cancelScan}>
+                      Oprește
+                    </Button>
+                  }
+                >
+                  <Stack spacing={1}>
+                    <span>
+                      {scanProgressText(progress, aiMode === "local")} (
+                      {formatElapsed(elapsed)})
+                    </span>
+                    <LinearProgress aria-label="Progresul citirii pozei" />
+                  </Stack>
                 </Alert>
               )}
               {scan.isError && (

@@ -50,7 +50,7 @@ public class LocalAiService {
                 OpenAiCompatibleReceiptScanner.USER_TEXT);
     }
 
-    public ReceiptScan receiptResult(String content) {
+    public ReceiptScanResult receiptResult(String content) {
         return OpenAiCompatibleReceiptScanner.parse(objectMapper, content, categoryService.list(),
                 LocalDate.now(clock));
     }

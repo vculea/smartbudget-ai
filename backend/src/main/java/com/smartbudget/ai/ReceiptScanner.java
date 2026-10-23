@@ -4,7 +4,7 @@ import com.smartbudget.category.CategoryResponse;
 import java.time.LocalDate;
 import java.util.List;
 
-/** Reads a receipt / payment photo and proposes the transaction it represents. */
+/** Reads a receipt / payment photo and proposes the transaction(s) it shows. */
 public interface ReceiptScanner {
 
     /**
@@ -13,5 +13,5 @@ public interface ReceiptScanner {
      * @param categories the only categories the result may refer to
      * @param today      used when the image has no readable date
      */
-    ReceiptScan scan(byte[] image, String mimeType, List<CategoryResponse> categories, LocalDate today);
+    ReceiptScanResult scan(byte[] image, String mimeType, List<CategoryResponse> categories, LocalDate today);
 }

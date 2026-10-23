@@ -47,7 +47,8 @@ export const DEFAULT_LOCAL_AI_SETTINGS: LocalAiSettings = {
   model: "llama3.1:8b",
   visionModel: "gemma4:26b",
   jsonMode: true,
-  timeoutSeconds: 120,
+  // Modelele locale de viziune se pot încărca minute întregi la prima folosire.
+  timeoutSeconds: 300,
 };
 
 export const AI_PROVIDER_PRESETS: Record<

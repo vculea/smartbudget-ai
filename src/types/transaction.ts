@@ -27,8 +27,8 @@ export interface TransactionInput {
 export type TransactionSortField = "transactionDate" | "amount";
 
 /**
- * Câmpurile propuse de `POST /transactions/scan` dintr-o poză. Sunt doar sugestii:
- * `amount` și `categoryId` pot lipsi când AI-ul nu le-a putut citi.
+ * O tranzacție propusă de `POST /transactions/scan` dintr-o poză (un bon dă una, un extras de cont mai multe).
+ * Sunt doar sugestii: `amount` și `categoryId` pot lipsi când AI-ul nu le-a putut citi.
  */
 export interface TransactionScan {
   type: TransactionType;
@@ -36,6 +36,21 @@ export interface TransactionScan {
   description: string;
   transactionDate: IsoDate;
   categoryId: string | null;
+}
+
+/**
+ * Etapa citirii unei poze: `waiting` = modelul se încarcă / analizează imaginea (încă nu a trimis nimic),
+ * `thinking` = modelul raționează, `writing` = modelul scrie răspunsul (`receivedChars` caractere primite).
+ */
+export interface ScanProgress {
+  phase: "waiting" | "thinking" | "writing";
+  receivedChars: number;
+}
+
+export interface ScanOptions {
+  /** Anulează citirea (și generarea, la modelul local). */
+  signal?: AbortSignal;
+  onProgress?: (progress: ScanProgress) => void;
 }
 
 /**

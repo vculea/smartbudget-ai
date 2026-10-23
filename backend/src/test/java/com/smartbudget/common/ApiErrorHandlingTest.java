@@ -16,6 +16,7 @@ import com.smartbudget.ai.AiInsightsController;
 import com.smartbudget.ai.AiInsightsResponse;
 import com.smartbudget.ai.AiInsightsService;
 import com.smartbudget.ai.ReceiptScan;
+import com.smartbudget.ai.ReceiptScanResult;
 import com.smartbudget.budget.BudgetController;
 import com.smartbudget.budget.BudgetService;
 import com.smartbudget.goal.GoalController;
@@ -71,17 +72,18 @@ class ApiErrorHandlingTest {
 
     @Test
     void scanReturnsProposedTransactionFields() throws Exception {
-        when(transactionScanService.scan(any())).thenReturn(new ReceiptScan(TransactionType.EXPENSE,
-                new BigDecimal("87.50"), "Kaufland", LocalDate.of(2026, 10, 20), "food"));
+        when(transactionScanService.scan(any())).thenReturn(new ReceiptScanResult(java.util.List.of(
+                new ReceiptScan(TransactionType.EXPENSE, new BigDecimal("87.50"), "Kaufland",
+                        LocalDate.of(2026, 10, 20), "food"))));
 
         mvc.perform(multipart("/api/v1/transactions/scan")
                         .file(new MockMultipartFile("image", "bon.jpg", "image/jpeg", new byte[] {1})))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.type").value("EXPENSE"))
-                .andExpect(jsonPath("$.amount").value(87.5))
-                .andExpect(jsonPath("$.description").value("Kaufland"))
-                .andExpect(jsonPath("$.transactionDate").value("2026-10-20"))
-                .andExpect(jsonPath("$.categoryId").value("food"));
+                .andExpect(jsonPath("$.transactions[0].type").value("EXPENSE"))
+                .andExpect(jsonPath("$.transactions[0].amount").value(87.5))
+                .andExpect(jsonPath("$.transactions[0].description").value("Kaufland"))
+                .andExpect(jsonPath("$.transactions[0].transactionDate").value("2026-10-20"))
+                .andExpect(jsonPath("$.transactions[0].categoryId").value("food"));
     }
 
     @Test

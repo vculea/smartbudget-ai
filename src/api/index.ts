@@ -43,10 +43,10 @@ export const transactionsApi: TransactionsApi = env.demoMode
   ? mockTransactionsApi
   : {
       ...httpTransactionsApi,
-      scan: (image) =>
+      scan: (image, options) =>
         getBrowserAiConfig(loadAiSettings())
-          ? localScanTransaction(image)
-          : httpTransactionsApi.scan(image),
+          ? localScanTransaction(image, options)
+          : httpTransactionsApi.scan(image, options),
     };
 // Importul CSV/Excel folosește AI-ul ales în Setări AI (server, model local sau cheie proprie).
 export const transactionImportAiApi: TransactionImportAiApi = env.demoMode

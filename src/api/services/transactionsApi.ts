@@ -40,14 +40,18 @@ export const httpTransactionsApi: TransactionsApi = {
     await http.delete(`/transactions/${id}`);
   },
   // Citirea pozei de către modelul AI local poate dura (la fel ca analiza AI).
-  async scan(image) {
+  async scan(image, options) {
     const body = new FormData();
     body.append("image", image, "bon.jpg");
-    const { data } = await http.post<TransactionScan>(
+    const { data } = await http.post<{ transactions: TransactionScan[] }>(
       "/transactions/scan",
       body,
-      { timeout: 180_000, headers: { "Content-Type": "multipart/form-data" } },
+      {
+        timeout: 180_000,
+        headers: { "Content-Type": "multipart/form-data" },
+        signal: options?.signal,
+      },
     );
-    return data;
+    return data.transactions;
   },
 };

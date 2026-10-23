@@ -95,8 +95,8 @@ class LocalAiServiceTest {
                 new CategoryResponse("food", "Alimente", TransactionType.EXPENSE, "#fff", "cart")));
 
         ReceiptScan scan = service.receiptResult(
-                "{\"type\":\"EXPENSE\",\"amount\":\"12,50\",\"description\":\"Lidl\","
-                        + "\"transactionDate\":\"2026-10-20\",\"categoryId\":\"food\"}");
+                "{\"transactions\":[{\"type\":\"EXPENSE\",\"amount\":\"12,50\",\"description\":\"Lidl\","
+                        + "\"transactionDate\":\"2026-10-20\",\"categoryId\":\"food\"}]}").transactions().get(0);
 
         assertThat(scan.amount()).isEqualByComparingTo("12.50");
         assertThat(scan.categoryId()).isEqualTo("food");

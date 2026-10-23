@@ -13,6 +13,7 @@ import {
 import { useToast } from "../../app/useToast";
 import type {
   CategoryMemoryLesson,
+  ScanOptions,
   TransactionInput,
   TransactionQuery,
 } from "../../types";
@@ -59,11 +60,18 @@ export function useSaveTransaction() {
   });
 }
 
+const importedMessage = (created: number) =>
+  created === 1
+    ? "S-a importat o tranzacție."
+    : `S-au importat ${created} tranzacții.`;
+
 /**
- * Salvează tranzacțiile verificate în previzualizarea importului, apoi învață din categoriile păstrate.
- * Dacă memoria nu poate fi actualizată, importul rămâne reușit.
+ * Salvează tranzacțiile verificate în previzualizarea importului (sau citite dintr-o poză),
+ * apoi învață din categoriile păstrate. Dacă memoria nu poate fi actualizată, salvarea rămâne reușită.
  */
-export function useImportTransactions() {
+export function useImportTransactions(
+  successMessage: (created: number) => string = importedMessage,
+) {
   const invalidate = useInvalidateFinanceData();
   const toast = useToast();
   return useMutation({
@@ -82,22 +90,23 @@ export function useImportTransactions() {
     },
     onSuccess: async ({ created }) => {
       await invalidate();
-      toast.success(
-        created === 1
-          ? "S-a importat o tranzacție."
-          : `S-au importat ${created} tranzacții.`,
-      );
+      toast.success(successMessage(created));
     },
     onError: (error) =>
       toast.error(getErrorMessage(error, "Importul nu a putut fi salvat.")),
   });
 }
 
-/** Citește poza unui bon cu AI; nu salvează nimic, doar propune valorile formularului. */
+/** Citește poza unui bon / extras cu AI; nu salvează nimic, doar propune tranzacțiile. */
 export function useScanTransaction() {
   return useMutation({
-    mutationFn: async (image: Blob) =>
-      transactionsApi.scan(await prepareImageForUpload(image)),
+    mutationFn: async ({
+      image,
+      options,
+    }: {
+      image: Blob;
+      options?: ScanOptions;
+    }) => transactionsApi.scan(await prepareImageForUpload(image), options),
   });
 }
 
