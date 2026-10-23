@@ -189,14 +189,19 @@ public class TransactionImportAiService {
     // ---- categorization ----
 
     public ImportAiPrompt categoriesPrompt(List<ImportItem> items) {
-        List<CategoryResponse> list = categoryService.list();
+        return categoriesPrompt(items, categoryService.list());
+    }
+
+    private ImportAiPrompt categoriesPrompt(List<ImportItem> items, List<CategoryResponse> list) {
         Map<String, Integer> codes = categoryCodes(list);
         List<Map<String, Object>> categories = list.stream()
                 .map(c -> Map.<String, Object>of("id", codes.get(c.id()), "name", c.name(), "type", c.type().name()))
                 .toList();
+        Map<String, TransactionType> categoryTypes = list.stream()
+                .collect(Collectors.toMap(CategoryResponse::id, CategoryResponse::type, (a, b) -> a));
         List<Map<String, Object>> examples = categoryMemory.examples(
                         items.stream().map(ImportItem::description).toList(),
-                        items.stream().map(ImportItem::type).collect(Collectors.toSet())).stream()
+                        items.stream().map(ImportItem::type).collect(Collectors.toSet()), categoryTypes).stream()
                 .filter(e -> codes.containsKey(e.categoryId()))
                 .map(e -> Map.<String, Object>of("merchant", e.merchant(), "type", e.type().name(),
                         "category", codes.get(e.categoryId())))
@@ -211,7 +216,11 @@ public class TransactionImportAiService {
 
     public ImportCategorizeResponse categoriesResult(String content, List<ImportItem> items) {
         JsonNode results = readObject(content).path("results");
-        List<CategoryResponse> list = categoryService.list();
+        return categoriesResult(results, items, categoryService.list());
+    }
+
+    private ImportCategorizeResponse categoriesResult(JsonNode results, List<ImportItem> items,
+            List<CategoryResponse> list) {
         Map<String, CategoryResponse> categories = list.stream()
                 .collect(Collectors.toMap(CategoryResponse::id, Function.identity()));
         Map<String, CategoryResponse> byCode = new HashMap<>();
@@ -240,8 +249,11 @@ public class TransactionImportAiService {
         return new ImportCategorizeResponse(suggestions);
     }
 
+    /** Loads the user's categories once and uses them for both the prompt and the answer. */
     public ImportCategorizeResponse categorize(List<ImportItem> items) {
-        return categoriesResult(complete(categoriesPrompt(items)), items);
+        List<CategoryResponse> list = categoryService.list();
+        String content = complete(categoriesPrompt(items, list));
+        return categoriesResult(readObject(content).path("results"), items, list);
     }
 
     /**

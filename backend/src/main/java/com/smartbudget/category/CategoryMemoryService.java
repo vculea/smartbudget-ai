@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.data.domain.Sort;
@@ -124,16 +125,32 @@ public class CategoryMemoryService {
 
     /** The user's habits most useful for categorizing {@code descriptions}: related merchants first, then recent. */
     public List<Example> examples(Collection<String> descriptions, Set<TransactionType> types) {
+        String userId = currentUser.id();
+        return examples(descriptions, types, () -> categoryTypes(userId));
+    }
+
+    /**
+     * Same as {@link #examples(Collection, Set)}, for a caller that already loaded the user's categories
+     * ({@code categoryTypes}: category id to its type), so they are not read again.
+     */
+    public List<Example> examples(Collection<String> descriptions, Set<TransactionType> types,
+                                  Map<String, TransactionType> categoryTypes) {
+        return examples(descriptions, types, () -> categoryTypes);
+    }
+
+    private List<Example> examples(Collection<String> descriptions, Set<TransactionType> types,
+                                   Supplier<Map<String, TransactionType>> categoryTypes) {
         if (descriptions.isEmpty() || types.isEmpty()) {
             return List.of();
         }
-        String userId = currentUser.id();
-        List<CategoryMemoryVote> votes = mongoTemplate.find(query(where("userId").is(userId).and("type").in(types))
-                .with(Sort.by(Sort.Direction.DESC, "updatedAt")).limit(EXAMPLE_SCAN_LIMIT), CategoryMemoryVote.class);
+        Query scan = query(where("userId").is(currentUser.id()).and("type").in(types))
+                .with(Sort.by(Sort.Direction.DESC, "updatedAt")).limit(EXAMPLE_SCAN_LIMIT);
+        scan.fields().include("key", "type", "categoryId", "hits");
+        List<CategoryMemoryVote> votes = mongoTemplate.find(scan, CategoryMemoryVote.class);
         if (votes.isEmpty()) {
             return List.of();
         }
-        Map<String, TransactionType> valid = categoryTypes(userId);
+        Map<String, TransactionType> valid = categoryTypes.get();
         Set<String> words = descriptions.stream().flatMap(d -> MerchantKey.tokens(d).stream())
                 .collect(Collectors.toSet());
 

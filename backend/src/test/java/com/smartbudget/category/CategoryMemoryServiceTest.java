@@ -144,6 +144,21 @@ class CategoryMemoryServiceTest {
     }
 
     @Test
+    void examplesReadOnlyTheNeededFieldsAndReuseTheGivenCategories() {
+        givenVotes(vote(EXPENSE, "glovo bucuresti", "fun", 4));
+
+        List<CategoryMemoryService.Example> examples = service.examples(List.of("GLOVO CLUJ"), Set.of(EXPENSE),
+                Map.of("fun", EXPENSE));
+
+        assertThat(examples).extracting(CategoryMemoryService.Example::categoryId).containsExactly("fun");
+        verify(categoryRepository, never()).findByUserId(any(), any());
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(mongoTemplate).find(query.capture(), eq(CategoryMemoryVote.class));
+        assertThat(query.getValue().getFieldsObject().keySet())
+                .containsExactlyInAnyOrder("key", "type", "categoryId", "hits");
+    }
+
+    @Test
     void entriesSummarizeEachMerchant() {
         givenVotes(vote(EXPENSE, "emag", "home", 3), vote(EXPENSE, "emag", "food", 2), vote(EXPENSE, "lidl", "food", 1));
 

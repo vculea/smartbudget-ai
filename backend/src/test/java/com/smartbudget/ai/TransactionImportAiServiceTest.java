@@ -2,7 +2,12 @@ package com.smartbudget.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +17,7 @@ import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.transaction.TransactionType;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -123,8 +129,9 @@ class TransactionImportAiServiceTest {
 
     @Test
     void categoriesPromptIncludesTheUsersEarlierChoices() {
-        when(memory.examples(List.of("GLOVO 123"), Set.of(TransactionType.EXPENSE))).thenReturn(List.of(
-                new CategoryMemoryService.Example("glovo", TransactionType.EXPENSE, "fun")));
+        when(memory.examples(List.of("GLOVO 123"), Set.of(TransactionType.EXPENSE), Map.of(
+                "food", TransactionType.EXPENSE, "fun", TransactionType.EXPENSE, "salary", TransactionType.INCOME)))
+                .thenReturn(List.of(new CategoryMemoryService.Example("glovo", TransactionType.EXPENSE, "fun")));
 
         ImportAiPrompt prompt = service.categoriesPrompt(List.of(new ImportItem(0, "GLOVO 123", TransactionType.EXPENSE)));
 
@@ -132,6 +139,8 @@ class TransactionImportAiServiceTest {
                 .contains("User's earlier choices (JSON):")
                 .contains("\"merchant\":\"glovo\"")
                 .contains("\"category\":2");
+        verify(categories, times(1)).list();
+        verify(memory, never()).examples(anyCollection(), anySet());
     }
 
     @Test
