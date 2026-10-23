@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import {
   mockAiInsightsApi,
+  mockBudgetPlanAiApi,
   mockBudgetsApi,
   mockCategoriesApi,
   mockCategoryMemoryApi,
@@ -11,6 +12,7 @@ import {
 } from "../mocks/mockApi";
 import type {
   AiInsightsApi,
+  BudgetPlanAiApi,
   BudgetsApi,
   CategoriesApi,
   CategoryMemoryApi,
@@ -20,7 +22,7 @@ import type {
   TransactionsApi,
 } from "./contracts";
 import { httpAiInsightsApi } from "./services/aiInsightsApi";
-import { httpBudgetsApi } from "./services/budgetsApi";
+import { httpBudgetPlanAiApi, httpBudgetsApi } from "./services/budgetsApi";
 import { httpCategoriesApi } from "./services/categoriesApi";
 import { httpCategoryMemoryApi } from "./services/categoryMemoryApi";
 import { httpDashboardApi } from "./services/dashboardApi";
@@ -29,6 +31,7 @@ import { httpImportAiApi } from "./services/importAiApi";
 import { httpTransactionsApi } from "./services/transactionsApi";
 import {
   localAiInsightsApi,
+  localBudgetPlanAiApi,
   localImportAiApi,
   localScanTransaction,
 } from "./services/localAiApi";
@@ -70,6 +73,14 @@ export const categoryMemoryApi: CategoryMemoryApi = env.demoMode
 export const budgetsApi: BudgetsApi = env.demoMode
   ? mockBudgetsApi
   : httpBudgetsApi;
+export const budgetPlanAiApi: BudgetPlanAiApi = env.demoMode
+  ? mockBudgetPlanAiApi
+  : {
+      suggest: (year) =>
+        getBrowserAiConfig(loadAiSettings())
+          ? localBudgetPlanAiApi.suggest(year)
+          : httpBudgetPlanAiApi.suggest(year),
+    };
 export const goalsApi: GoalsApi = env.demoMode ? mockGoalsApi : httpGoalsApi;
 export const aiInsightsApi: AiInsightsApi = env.demoMode
   ? mockAiInsightsApi

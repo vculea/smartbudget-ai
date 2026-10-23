@@ -1,5 +1,6 @@
 import type {
   AiInsightsApi,
+  BudgetPlanAiApi,
   BudgetsApi,
   CategoriesApi,
   CategoryMemoryApi,
@@ -17,12 +18,14 @@ import type {
   CategoryInput,
   DashboardResponse,
   Goal,
+  IncomePlan,
   Period,
   Transaction,
   YearMonth,
 } from "../types";
 import { formatCurrency, formatPercent } from "../utils/format";
 import {
+  currentMonth,
   formatPeriodLabel,
   isYearPeriod,
   shiftMonth,
@@ -94,16 +97,25 @@ function toBudget(db: DemoDb, stored: StoredBudget): Budget {
   };
 }
 
-/** Pentru un an, limitele aceleiași categorii sunt însumate pe toate lunile. */
-function budgetsForPeriod(db: DemoDb, period: Period): Budget[] {
+const categoryType = (db: DemoDb, categoryId: string) =>
+  db.categories.find((c) => c.id === categoryId)?.type;
+
+/** Ca în backend: bugetele pe categorii de venit sunt venituri planificate, listate separat. */
+const isExpenseBudget = (db: DemoDb, b: StoredBudget) =>
+  categoryType(db, b.categoryId) !== "INCOME";
+
+/** Pentru un an, sumele aceleiași categorii sunt însumate pe toate lunile. */
+function storedForPeriod(
+  db: DemoDb,
+  period: Period,
+  keep: (b: StoredBudget) => boolean,
+): StoredBudget[] {
   if (!isYearPeriod(period)) {
-    return db.budgets
-      .filter((b) => b.month === period)
-      .map((b) => toBudget(db, b));
+    return db.budgets.filter((b) => b.month === period && keep(b));
   }
   const byCategory = new Map<string, StoredBudget>();
   db.budgets
-    .filter((b) => b.month.startsWith(period))
+    .filter((b) => b.month.startsWith(period) && keep(b))
     .forEach((b) => {
       const existing = byCategory.get(b.categoryId);
       byCategory.set(b.categoryId, {
@@ -113,8 +125,54 @@ function budgetsForPeriod(db: DemoDb, period: Period): Budget[] {
         limitAmount: round2((existing?.limitAmount ?? 0) + b.limitAmount),
       });
     });
-  return [...byCategory.values()]
+  return [...byCategory.values()];
+}
+
+function budgetsForPeriod(db: DemoDb, period: Period): Budget[] {
+  return storedForPeriod(db, period, (b) => isExpenseBudget(db, b))
     .map((b) => toBudget(db, b))
+    .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+}
+
+function incomePlansForPeriod(db: DemoDb, period: Period): IncomePlan[] {
+  const current = currentMonth();
+  const ended = isYearPeriod(period)
+    ? period < current.slice(0, 4)
+    : period < current;
+  return storedForPeriod(
+    db,
+    period,
+    (b) => categoryType(db, b.categoryId) === "INCOME",
+  )
+    .map((b) => {
+      const received = sumBy(
+        db.transactions.filter(
+          (t) =>
+            t.type === "INCOME" &&
+            t.categoryId === b.categoryId &&
+            t.transactionDate.startsWith(period),
+        ),
+      );
+      return {
+        id: b.id,
+        categoryId: b.categoryId,
+        categoryName:
+          db.categories.find((c) => c.id === b.categoryId)?.name ??
+          "Necunoscut",
+        month: period,
+        expectedAmount: b.limitAmount,
+        receivedAmount: received,
+        remainingAmount: Math.max(0, round2(b.limitAmount - received)),
+        percentageReceived:
+          b.limitAmount > 0 ? round2((received / b.limitAmount) * 100) : 0,
+        status:
+          received >= b.limitAmount
+            ? ("REACHED" as const)
+            : ended
+              ? ("BELOW" as const)
+              : ("PENDING" as const),
+      };
+    })
     .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
 
@@ -551,6 +609,11 @@ export const mockBudgetsApi: BudgetsApi = {
     return budgetsForPeriod(loadDb(), period);
   },
 
+  async listIncome(period) {
+    await delay();
+    return incomePlansForPeriod(loadDb(), period);
+  },
+
   async create(input) {
     await delay();
     const db = loadDb();
@@ -577,6 +640,144 @@ export const mockBudgetsApi: BudgetsApi = {
     db.budgets.push(stored);
     saveDb(db);
     return toBudget(db, stored);
+  },
+
+  async createForYear(input) {
+    await delay();
+    const db = loadDb();
+    const ids = new Set<string>();
+    for (const item of input.items) {
+      if (!db.categories.some((c) => c.id === item.categoryId))
+        throw new ApiError("Categoria nu a fost găsită.", 404);
+      if (ids.has(item.categoryId))
+        throw new ApiError("O categorie apare de mai multe ori în listă.", 400);
+      if (!(item.limitAmount > 0))
+        throw new ApiError("Suma trebuie să fie mai mare decât 0.", 400);
+      ids.add(item.categoryId);
+    }
+    const months = [...new Set(input.months)]
+      .filter((m) => m >= 1 && m <= 12)
+      .sort((a, b) => a - b);
+    if (months.length === 0)
+      throw new ApiError("Alege cel puțin o lună.", 400);
+    let created = 0;
+    let skipped = 0;
+    for (const item of input.items) {
+      for (const m of months) {
+        const month = `${input.year}-${String(m).padStart(2, "0")}`;
+        if (
+          db.budgets.some(
+            (b) => b.month === month && b.categoryId === item.categoryId,
+          )
+        ) {
+          skipped++;
+          continue;
+        }
+        db.budgets.push({
+          id: String(db.nextId.budget++),
+          categoryId: item.categoryId,
+          month,
+          limitAmount: round2(item.limitAmount),
+        });
+        created++;
+      }
+    }
+    saveDb(db);
+    return { created, skipped };
+  },
+};
+
+/** Ca în backend: mediile lunare pe categorie din lunile încheiate ale anului ales și ale anului anterior. */
+export const mockBudgetPlanAiApi: BudgetPlanAiApi = {
+  async suggest(year) {
+    await delay(4);
+    const db = loadDb();
+    const reference = Math.min(year, Number(currentMonth().slice(0, 4)));
+    const lastComplete = shiftMonth(currentMonth(), -1);
+    const firstMonth = db.transactions
+      .map((t) => t.transactionDate.slice(0, 7))
+      .sort()[0];
+    const history: { year: number; byCategory: Map<string, number> }[] = [];
+    if (firstMonth) {
+      for (const y of [reference - 1, reference]) {
+        const months = Array.from(
+          { length: 12 },
+          (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`,
+        ).filter((m) => m >= firstMonth && m <= lastComplete);
+        if (months.length === 0) continue;
+        const totals = new Map<string, number>();
+        db.transactions
+          .filter((t) => months.includes(t.transactionDate.slice(0, 7)))
+          .forEach((t) =>
+            totals.set(t.categoryId, (totals.get(t.categoryId) ?? 0) + t.amount),
+          );
+        totals.forEach((total, id) =>
+          totals.set(id, round2(total / months.length)),
+        );
+        history.push({ year: y, byCategory: totals });
+      }
+    }
+    const averagesOf = (categoryId: string) =>
+      history.map((h) => ({
+        year: h.year,
+        monthlyAverage: h.byCategory.get(categoryId) ?? 0,
+      }));
+    const withAmounts = (type: "EXPENSE" | "INCOME") =>
+      db.categories
+        .filter(
+          (c) =>
+            c.type === type &&
+            history.some((h) => (h.byCategory.get(c.id) ?? 0) > 0),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const budgets = withAmounts("EXPENSE").map((c) => {
+      const averages = averagesOf(c.id);
+      const recent = averages[averages.length - 1]?.monthlyAverage ?? 0;
+      const previous =
+        averages.length > 1 ? (averages[0]?.monthlyAverage ?? 0) : recent;
+      const growing = previous > 0 && recent > previous * 1.1;
+      const base = (0.6 * recent + 0.4 * previous) * (growing ? 0.95 : 1);
+      return {
+        categoryId: c.id,
+        categoryName: c.name,
+        monthlyAmount: Math.max(10, Math.ceil(base / 10) * 10),
+        reason: growing
+          ? `Cheltuielile au crescut de la ${formatCurrency(previous)} la ${formatCurrency(recent)} pe lună; propun o reducere ușoară.`
+          : `Media lunară recentă este ${formatCurrency(recent)}; limita o urmează îndeaproape.`,
+        history: averages,
+      };
+    });
+    // Prudent: nu mai mult decât cea mai mică medie, rotunjit în jos.
+    const incomes = withAmounts("INCOME").map((c) => {
+      const averages = averagesOf(c.id);
+      const lowest = Math.min(
+        ...averages.map((a) => a.monthlyAverage).filter((v) => v > 0),
+      );
+      return {
+        categoryId: c.id,
+        categoryName: c.name,
+        monthlyAmount: Math.max(10, Math.floor(lowest / 10) * 10),
+        reason: `Estimare prudentă: media lunară cea mai mică din ultimii ani este ${formatCurrency(lowest)}.`,
+        history: averages,
+      };
+    });
+    if (budgets.length === 0 && incomes.length === 0) {
+      throw new ApiError(
+        `Nu există tranzacții în ${reference - 1} sau ${reference} (luni încheiate) pe baza cărora să fie propus un buget.`,
+        422,
+      );
+    }
+    const total = budgets.reduce((sum, b) => sum + b.monthlyAmount, 0);
+    const income = incomes.reduce((sum, b) => sum + b.monthlyAmount, 0);
+    return {
+      year,
+      basedOnYears: history.map((h) => h.year),
+      summary: `Propunere pe baza mediilor lunare din ${history.map((h) => h.year).join(" și ")}: venituri așteptate de ${formatCurrency(income)} și limite de ${formatCurrency(total)} pe lună, deci un sold planificat de ${formatCurrency(income - total)} pe lună.`,
+      budgets,
+      incomes,
+      generatedAt: new Date().toISOString(),
+    };
   },
 };
 

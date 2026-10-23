@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 
@@ -155,6 +157,108 @@ class BudgetServiceTest {
         assertThat(yearly.spentAmount()).isEqualByComparingTo("1800.00");
         assertThat(yearly.status()).isEqualTo(BudgetStatus.EXCEEDED);
         assertThat(yearly.id()).isEqualTo("2026:c1");
+    }
+
+    @Test
+    void createsYearBudgetsForChosenMonthsAndSkipsExistingOnes() {
+        when(categories.getById("c1")).thenReturn(expenseCategory());
+        when(categories.getById("c3")).thenReturn(new Category("c3", "Transport", TransactionType.EXPENSE, null, null));
+        Budget existing = budget("old", "c1", "900");
+        existing.setMonth("2027-02");
+        when(repository.findByUserIdAndMonthStartingWith(TestUser.ID, "2027-")).thenReturn(List.of(existing));
+
+        BudgetYearResponse response = service.createForYear(new BudgetYearRequest(2027, List.of(3, 1, 2, 1),
+                List.of(new BudgetYearRequest.Item("c1", new BigDecimal("500")),
+                        new BudgetYearRequest.Item("c3", new BigDecimal("250.5")))));
+
+        assertThat(response.created()).isEqualTo(5);
+        assertThat(response.skipped()).isEqualTo(1);
+        ArgumentCaptor<Budget> saved = ArgumentCaptor.forClass(Budget.class);
+        verify(repository, times(5)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(b -> b.getCategoryId() + "@" + b.getMonth())
+                .containsExactly("c1@2027-01", "c1@2027-03", "c3@2027-01", "c3@2027-02", "c3@2027-03");
+        assertThat(saved.getAllValues().get(2).getLimitAmount()).isEqualByComparingTo("250.50");
+        assertThat(saved.getAllValues()).allSatisfy(b -> assertThat(b.getUserId()).isEqualTo(TestUser.ID));
+    }
+
+    @Test
+    void yearBudgetCountsConcurrentDuplicateAsSkipped() {
+        when(categories.getById("c1")).thenReturn(expenseCategory());
+        when(repository.findByUserIdAndMonthStartingWith(TestUser.ID, "2027-")).thenReturn(List.of());
+        when(repository.save(any(Budget.class))).thenThrow(new DuplicateKeyException("E11000 duplicate key"));
+
+        BudgetYearResponse response = service.createForYear(new BudgetYearRequest(2027, List.of(1),
+                List.of(new BudgetYearRequest.Item("c1", new BigDecimal("500")))));
+
+        assertThat(response.created()).isZero();
+        assertThat(response.skipped()).isEqualTo(1);
+    }
+
+    @Test
+    void yearBudgetAcceptsIncomeCategoriesAsPlannedIncome() {
+        when(categories.getById("c2")).thenReturn(new Category("c2", "Salariu", TransactionType.INCOME, null, null));
+        when(repository.findByUserIdAndMonthStartingWith(TestUser.ID, "2027-")).thenReturn(List.of());
+
+        BudgetYearResponse response = service.createForYear(new BudgetYearRequest(2027, List.of(1, 2),
+                List.of(new BudgetYearRequest.Item("c2", new BigDecimal("6000")))));
+
+        assertThat(response.created()).isEqualTo(2);
+    }
+
+    @Test
+    void yearBudgetRejectsDuplicateCategoryAndInvalidYear() {
+        when(categories.getById("c1")).thenReturn(expenseCategory());
+        BudgetYearRequest.Item food = new BudgetYearRequest.Item("c1", new BigDecimal("500"));
+
+        assertThatThrownBy(() -> service.createForYear(new BudgetYearRequest(2027, List.of(1), List.of(food, food))))
+                .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> service.createForYear(new BudgetYearRequest(1999, List.of(1), List.of(food))))
+                .isInstanceOfSatisfying(ApiException.class, ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void expenseListsSkipPlannedIncomesWhichAreListedSeparately() {
+        Budget food = budget("b1", "c1", "1000");
+        Budget salary = budget("b2", "c2", "6000");
+        when(repository.findByUserIdAndMonth(TestUser.ID, "2026-10")).thenReturn(List.of(food, salary));
+        when(categories.getByIds(any())).thenReturn(Map.of(
+                "c1", expenseCategory(),
+                "c2", new Category("c2", "Salariu", TransactionType.INCOME, null, null)));
+        when(stats.incomesByCategory(any(), any())).thenReturn(Map.of("c2", new BigDecimal("4500")));
+
+        assertThat(service.list(MONTH)).extracting(BudgetResponse::categoryId).containsExactly("c1");
+        List<IncomePlanResponse> incomes = service.listIncome(MONTH);
+
+        assertThat(incomes).singleElement().satisfies(plan -> {
+            assertThat(plan.categoryName()).isEqualTo("Salariu");
+            assertThat(plan.expectedAmount()).isEqualByComparingTo("6000.00");
+            assertThat(plan.receivedAmount()).isEqualByComparingTo("4500.00");
+            assertThat(plan.remainingAmount()).isEqualByComparingTo("1500.00");
+            assertThat(plan.percentageReceived()).isEqualByComparingTo("75.00");
+            // The clock is in October 2026, so the month is still running.
+            assertThat(plan.status()).isEqualTo(IncomePlanStatus.PENDING);
+        });
+    }
+
+    @Test
+    void yearlyIncomePlanOfAPastYearBelowTheExpectedAmountIsBelow() {
+        Budget jan = budget("b1", "c2", "6000");
+        jan.setMonth("2025-01");
+        Budget feb = budget("b2", "c2", "6000");
+        feb.setMonth("2025-02");
+        when(repository.findByUserIdAndMonthStartingWith(TestUser.ID, "2025-")).thenReturn(List.of(jan, feb));
+        when(categories.getByIds(any())).thenReturn(Map.of(
+                "c2", new Category("c2", "Salariu", TransactionType.INCOME, null, null)));
+        when(stats.incomesByCategory(any(), any())).thenReturn(Map.of("c2", new BigDecimal("11000")));
+
+        List<IncomePlanResponse> incomes = service.listIncomeForYear(2025);
+
+        assertThat(incomes).singleElement().satisfies(plan -> {
+            assertThat(plan.id()).isEqualTo("2025:c2");
+            assertThat(plan.expectedAmount()).isEqualByComparingTo("12000.00");
+            assertThat(plan.status()).isEqualTo(IncomePlanStatus.BELOW);
+        });
     }
 
     private static Category expenseCategory() {

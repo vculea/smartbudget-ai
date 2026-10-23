@@ -5,7 +5,7 @@ import { http } from "../http";
 import { getBudgetLevelFromStatus } from "../../utils/budget";
 import { getGoalDisplayStatus } from "../../utils/goal";
 import { httpAiInsightsApi, toAiInsightsResponse } from "./aiInsightsApi";
-import { httpBudgetsApi } from "./budgetsApi";
+import { httpBudgetPlanAiApi, httpBudgetsApi } from "./budgetsApi";
 import { httpDashboardApi } from "./dashboardApi";
 import { httpGoalsApi } from "./goalsApi";
 import { httpTransactionsApi } from "./transactionsApi";
@@ -153,16 +153,53 @@ describe("contract HTTP față de backend", () => {
     expect(JSON.parse(String(calls[2]?.data))).toEqual({ amount: 50 });
   });
 
+  it("trimite bugetul anual și cererea de propunere AI în formatul backendului", async () => {
+    mockBackend((config) =>
+      config.url === "/budgets/year"
+        ? { status: 200, data: { created: 22, skipped: 2 } }
+        : {
+            status: 200,
+            data: {
+              year: 2027,
+              basedOnYears: [2025, 2026],
+              summary: "Plan",
+              budgets: [],
+              generatedAt: "2026-10-22T10:00:00Z",
+            },
+          },
+    );
+    const input = {
+      year: 2027,
+      months: [1, 2],
+      items: [{ categoryId: "demo-cat-health", limitAmount: 200 }],
+    };
+
+    const result = await httpBudgetsApi.createForYear(input);
+    const plan = await httpBudgetPlanAiApi.suggest(2027);
+
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "post /budgets/year",
+      "post /ai/budget-plan",
+    ]);
+    expect(JSON.parse(String(calls[0]?.data))).toEqual(input);
+    expect(result).toEqual({ created: 22, skipped: 2 });
+    expect(JSON.parse(String(calls[1]?.data))).toEqual({ year: 2027 });
+    expect(plan.basedOnYears).toEqual([2025, 2026]);
+  });
+
   it("trimite parametrul year pentru perioade anuale și month pentru lunare", async () => {
     mockBackend(() => ({ status: 200, data: [] }));
     await httpBudgetsApi.list("2026");
     await httpBudgetsApi.list("2026-10");
     await httpDashboardApi.get("2026");
+    await httpBudgetsApi.listIncome("2026");
 
     expect(calls[0]?.params).toEqual({ year: 2026 });
     expect(calls[1]?.params).toEqual({ month: "2026-10" });
     expect(calls[2]?.url).toBe("/dashboard");
     expect(calls[2]?.params).toEqual({ year: 2026 });
+    expect(calls[3]?.url).toBe("/budgets/income");
+    expect(calls[3]?.params).toEqual({ year: 2026 });
   });
 
   it("mapează insights-urile AI ale backendului în recomandări", async () => {

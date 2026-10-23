@@ -43,10 +43,33 @@ public class BudgetController {
         return service.list(month != null ? month : YearMonth.now(clock));
     }
 
+    @GetMapping("/income")
+    @Operation(summary = "List the planned incomes of a month (or of a year) with the amount received and status",
+            description = "Planned incomes are budgets on income categories (created with POST /budgets/year). "
+                    + "month format YYYY-MM, defaults to the current month; with year=YYYY the monthly amounts are "
+                    + "summed. Status: REACHED, PENDING or BELOW (period ended without reaching the amount).")
+    public List<IncomePlanResponse> listIncome(@RequestParam(required = false) YearMonth month,
+                                               @RequestParam(required = false) Integer year) {
+        Years.requireSingleSelector(month, year);
+        if (year != null) {
+            return service.listIncomeForYear(Years.require(year));
+        }
+        return service.listIncome(month != null ? month : YearMonth.now(clock));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a budget (one per category and month)")
     public BudgetResponse create(@Valid @RequestBody BudgetRequest request) {
         return service.create(request);
+    }
+
+    @PostMapping("/year")
+    @Operation(summary = "Create the budgets of a year: one monthly amount per category, applied to the chosen months",
+            description = "Expense categories get a spending limit, income categories an expected income. Months where "
+                    + "the category already has one are left unchanged and counted as skipped. "
+                    + "Errors: 400 invalid year or duplicate category, 404 unknown category.")
+    public BudgetYearResponse createForYear(@Valid @RequestBody BudgetYearRequest request) {
+        return service.createForYear(request);
     }
 }

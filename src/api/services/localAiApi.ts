@@ -1,4 +1,9 @@
-import type { AiInsightsApi, TransactionImportAiApi, TransactionsApi } from "../contracts";
+import type {
+  AiInsightsApi,
+  BudgetPlanAiApi,
+  TransactionImportAiApi,
+  TransactionsApi,
+} from "../contracts";
 import { ApiError } from "../errors";
 import { http } from "../http";
 import {
@@ -9,6 +14,7 @@ import {
 } from "../../config/aiSettings";
 import { toAiInsightsResponse, type AiInsightsWire } from "./aiInsightsApi";
 import type {
+  BudgetPlan,
   ImportCategorySuggestion,
   ImportColumnMapping,
   ScanProgress,
@@ -336,6 +342,26 @@ interface ImportPrompt {
   systemPrompt: string;
   userMessage: string;
 }
+
+// Backendul calculează mediile și validează limitele propuse; doar apelul către model pornește din browser.
+export const localBudgetPlanAiApi: BudgetPlanAiApi = {
+  async suggest(year) {
+    const settings = activeConfig();
+    const { data: prompt } = await http.post<ImportPrompt>(
+      "/ai/local/budget-plan/prompt",
+      { year },
+    );
+    const content = await chat(settings, settings.model, [
+      { role: "system", content: prompt.systemPrompt },
+      { role: "user", content: prompt.userMessage },
+    ]);
+    const { data } = await http.post<BudgetPlan>(
+      "/ai/local/budget-plan/result",
+      { year, content },
+    );
+    return data;
+  },
+};
 
 // Backendul construiește prompturile și validează răspunsul; doar apelul către model pornește din browser.
 export const localImportAiApi: TransactionImportAiApi = {

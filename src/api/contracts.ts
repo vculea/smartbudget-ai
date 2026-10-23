@@ -3,6 +3,9 @@ import type {
   AiInsightsResponse,
   Budget,
   BudgetInput,
+  BudgetPlan,
+  BudgetYearInput,
+  BudgetYearResult,
   Category,
   CategoryInput,
   CategoryMemoryLesson,
@@ -15,6 +18,7 @@ import type {
   ImportCategorySuggestion,
   ImportColumnMapping,
   ImportExistingItem,
+  IncomePlan,
   Page,
   RememberedMerchant,
   ScanOptions,
@@ -77,8 +81,18 @@ export interface CategoriesApi {
 }
 
 export interface BudgetsApi {
+  /** Doar bugetele de cheltuieli. */
   list(period: Period): Promise<Budget[]>;
+  /** Veniturile planificate (bugete pe categorii de venit). */
+  listIncome(period: Period): Promise<IncomePlan[]>;
   create(input: BudgetInput): Promise<Budget>;
+  /** Creează limitele și veniturile planificate ale unui an; lunile care au deja sumă pe categorie rămân neschimbate. */
+  createForYear(input: BudgetYearInput): Promise<BudgetYearResult>;
+}
+
+export interface BudgetPlanAiApi {
+  /** AI-ul propune limite și venituri lunare pentru un an, pe baza anului ales și a anului anterior. */
+  suggest(year: number): Promise<BudgetPlan>;
 }
 
 export interface GoalsApi {
