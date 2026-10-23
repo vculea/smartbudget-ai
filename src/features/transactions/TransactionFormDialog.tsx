@@ -264,7 +264,7 @@ function TransactionForm({
                   htmlInput: { inputMode: "decimal" },
                   input: {
                     endAdornment: (
-                      <InputAdornment position="end">RON</InputAdornment>
+                      <InputAdornment position="end">lei</InputAdornment>
                     ),
                   },
                 }}

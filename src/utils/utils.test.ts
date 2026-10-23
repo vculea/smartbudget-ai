@@ -11,10 +11,9 @@ import {
 } from "./date";
 
 describe("formatare", () => {
-  it("formatează sumele în RON cu localizarea ro-RO", () => {
+  it("formatează sumele în lei cu localizarea ro-RO", () => {
     const text = formatCurrency(1234.5).replace(/\s/g, " ");
-    expect(text).toContain("1.234,50");
-    expect(text).toContain("RON");
+    expect(text).toBe("1.234,50 lei");
   });
 
   it("formatează procentele", () => {

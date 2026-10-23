@@ -40,6 +40,19 @@ class AiResponseParserTest {
     }
 
     @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+            "Cheltuieli de 43,36€ și zero venituri.|Cheltuieli de 43,36 lei și zero venituri.",
+            "Credit de -4336,55€.|Credit de -4336,55 lei.",
+            "Ai cheltuit € 250 la restaurante.|Ai cheltuit 250 lei la restaurante.",
+            "Ai cheltuit 250 EUR, adică 250 euro.|Ai cheltuit 250 lei, adică 250 lei.",
+            "Ai depășit bugetul cu 85 RON.|Ai depășit bugetul cu 85 lei.",
+            "Ai cheltuit 85 lei.|Ai cheltuit 85 lei."
+    })
+    void normalizesCurrencyToLei(String input, String expected) {
+        assertThat(AiResponseParser.normalizeCurrency(input)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {
             "not json at all",
             "",

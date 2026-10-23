@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 
 /** Parses and validates the model's JSON answer before anything is returned to the frontend. */
@@ -17,6 +18,13 @@ public class AiResponseParser {
     static final int MAX_SUMMARY = 1000;
     static final int MAX_TITLE = 120;
     static final int MAX_REASON = 600;
+
+    private static final Pattern CURRENCY_BEFORE_AMOUNT =
+            Pattern.compile("(?:€|\\bEUR\\b|\\bRON\\b)\\s?(-?\\d[\\d.,]*\\d|-?\\d)");
+    private static final Pattern CURRENCY_AFTER_AMOUNT =
+            Pattern.compile("(\\d)\\s?(?:€|\\bEUR\\b|\\beuro\\b|\\bRON\\b)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CURRENCY_WORD =
+            Pattern.compile("€|\\bEUR\\b|\\beuro\\b|\\bRON\\b", Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper;
 
@@ -50,7 +58,14 @@ public class AiResponseParser {
         for (RawInsight item : raw.insights().stream().limit(MAX_INSIGHTS).toList()) {
             insights.add(validate(item, summary));
         }
-        return new AiAnalysis(raw.summary().strip(), List.copyOf(insights));
+        return new AiAnalysis(normalizeCurrency(raw.summary().strip()), List.copyOf(insights));
+    }
+
+    /** All amounts are in lei; models sometimes label them with € or EUR anyway, which is misleading. */
+    static String normalizeCurrency(String text) {
+        String result = CURRENCY_BEFORE_AMOUNT.matcher(text).replaceAll("$1 lei");
+        result = CURRENCY_AFTER_AMOUNT.matcher(result).replaceAll("$1 lei");
+        return CURRENCY_WORD.matcher(result).replaceAll("lei");
     }
 
     private AiAnalysis.Insight validate(RawInsight item, FinancialSummary summary) {
@@ -70,7 +85,8 @@ public class AiResponseParser {
         } catch (RuntimeException ex) {
             throw invalid("prioritate invalidă");
         }
-        return new AiAnalysis.Insight(item.title().strip(), item.reason().strip(), Money.scale(saving), priority);
+        return new AiAnalysis.Insight(normalizeCurrency(item.title().strip()), normalizeCurrency(item.reason().strip()),
+                Money.scale(saving), priority);
     }
 
     static String stripCodeFence(String content) {
