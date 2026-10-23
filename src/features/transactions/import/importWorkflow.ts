@@ -2,10 +2,12 @@ import {
   categoryMemoryApi,
   getErrorMessage,
   transactionImportAiApi,
+  transactionsApi,
 } from "../../../api";
 import type {
   CategoryMemoryApi,
   TransactionImportAiApi,
+  TransactionsApi,
 } from "../../../api/contracts";
 import type { Category, CategoryMemoryLesson } from "../../../types";
 import {
@@ -14,6 +16,7 @@ import {
   categoryBatches,
   detectColumnsByHeader,
   checkMapping,
+  existingCheckItems,
   readImportFile,
   sampleRowsForAi,
   type ImportDraft,
@@ -113,6 +116,29 @@ export async function rememberedCategories(
     }
   }
   return updates;
+}
+
+/**
+ * Cheile rândurilor care există deja în aplicație (fișier importat a doua oară), dintr-un singur apel.
+ * `failed`: verificarea nu a reușit; importul continuă fără ea.
+ */
+export async function existingDrafts(
+  drafts: ImportDraft[],
+  api: Pick<TransactionsApi, "findExisting"> = transactionsApi,
+): Promise<{ keys: Set<string>; failed: boolean }> {
+  const items = existingCheckItems(drafts);
+  if (items.length === 0) return { keys: new Set(), failed: false };
+  try {
+    const indexes = await api.findExisting(items);
+    return {
+      keys: new Set(
+        indexes.flatMap((i) => (drafts[i] ? [drafts[i].key] : [])),
+      ),
+      failed: false,
+    };
+  } catch {
+    return { keys: new Set(), failed: true };
+  }
 }
 
 /**

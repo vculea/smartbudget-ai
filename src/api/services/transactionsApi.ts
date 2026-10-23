@@ -25,6 +25,13 @@ export const httpTransactionsApi: TransactionsApi = {
     );
     return data;
   },
+  async findExisting(items) {
+    const { data } = await http.post<{ indexes: number[] }>(
+      "/transactions/import/existing",
+      { items },
+    );
+    return data.indexes;
+  },
   async update(id, input) {
     const { data } = await http.put<Transaction>(`/transactions/${id}`, input);
     return data;

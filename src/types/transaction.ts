@@ -64,6 +64,15 @@ export interface ImportCategoryItem {
   type: TransactionType;
 }
 
+/** Un rând din fișier verificat la `POST /transactions/import/existing` (există deja în aplicație?). */
+export interface ImportExistingItem {
+  index: number;
+  type: TransactionType;
+  amount: number;
+  description: string;
+  transactionDate: IsoDate;
+}
+
 /** `categoryId` este `null` când AI-ul nu a fost sigur; utilizatorul alege atunci categoria. */
 export interface ImportCategorySuggestion {
   index: number;

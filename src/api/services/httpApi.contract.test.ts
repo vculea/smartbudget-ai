@@ -110,6 +110,26 @@ describe("contract HTTP față de backend", () => {
     expect(JSON.parse(String(calls[0]?.data))).toEqual(input);
   });
 
+  it("trimite rândurile importului la verificarea dublurilor și întoarce indicii", async () => {
+    mockBackend(() => ({ status: 200, data: { indexes: [1] } }));
+    const items = [
+      {
+        index: 1,
+        type: "EXPENSE" as const,
+        amount: 12.5,
+        description: "Cafea",
+        transactionDate: "2026-10-05",
+      },
+    ];
+
+    const result = await httpTransactionsApi.findExisting(items);
+
+    expect(calls[0]?.method).toBe("post");
+    expect(calls[0]?.url).toBe("/transactions/import/existing");
+    expect(JSON.parse(String(calls[0]?.data))).toEqual({ items });
+    expect(result).toEqual([1]);
+  });
+
   it("trimite bugetul și contribuția în formatul așteptat de backend", async () => {
     mockBackend(() => ({ status: 201, data: {} }));
     await httpBudgetsApi.create({

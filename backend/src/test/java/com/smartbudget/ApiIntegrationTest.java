@@ -315,6 +315,33 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void importFindsTheRowsThatAreAlreadySaved() throws Exception {
+        createTransaction("EXPENSE", "12.50", "Cafenea Ștefan", "2026-09-10", "food");
+        createTransaction("EXPENSE", "12.50", "Cafenea Ștefan", "2026-09-10", "food");
+        createTransaction("INCOME", "5000", "Salariu", "2026-09-01", "salary");
+
+        String body = """
+                {"items": [
+                  {"index": 0, "type": "EXPENSE", "amount": 12.5, "description": "CAFENEA STEFAN", "transactionDate": "2026-09-10"},
+                  {"index": 1, "type": "EXPENSE", "amount": 12.5, "description": "Cafenea Stefan", "transactionDate": "2026-09-10"},
+                  {"index": 2, "type": "EXPENSE", "amount": 12.5, "description": "Cafenea Stefan", "transactionDate": "2026-09-10"},
+                  {"index": 3, "type": "INCOME", "amount": 5000, "description": "Salariu", "transactionDate": "2026-09-02"}]}""";
+        mvc.perform(post("/api/v1/transactions/import/existing").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.indexes.length()").value(2))
+                .andExpect(jsonPath("$.indexes[0]").value(0))
+                .andExpect(jsonPath("$.indexes[1]").value(1));
+
+        // other users' transactions never match
+        mvc.perform(post("/api/v1/transactions/import/existing").with(user("user-2"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.indexes.length()").value(0));
+        mvc.perform(post("/api/v1/transactions/import/existing").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\": []}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void transactionListSupportsFiltersPaginationAndSorting() throws Exception {
         createTransaction("INCOME", "5000", "Salariu septembrie", "2026-09-01", "salary");
         createTransaction("EXPENSE", "100", "Supermarket Mega", "2026-09-05", "food");

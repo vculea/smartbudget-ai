@@ -240,4 +240,26 @@ class TransactionServiceTest {
                         ex -> assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY));
         verify(repository, never()).saveAll(any());
     }
+
+    @Test
+    void findExistingReportsEachSavedTransactionOnlyOnce() {
+        Transaction saved = new Transaction();
+        saved.setType(TransactionType.EXPENSE);
+        saved.setAmount(new BigDecimal("12.50"));
+        saved.setDescription("Cafenea Ștefan");
+        saved.setTransactionDate(LocalDate.of(2026, 10, 3));
+        when(mongoTemplate.find(any(org.springframework.data.mongodb.core.query.Query.class), org.mockito.ArgumentMatchers.eq(Transaction.class)))
+                .thenReturn(java.util.List.of(saved));
+        LocalDate day = LocalDate.of(2026, 10, 3);
+
+        ExistingTransactionsResponse response = service.findExisting(new ExistingTransactionsRequest(java.util.List.of(
+                new ExistingTransactionsRequest.Item(0, TransactionType.EXPENSE, new BigDecimal("12.5"), "CAFENEA stefan.", day),
+                new ExistingTransactionsRequest.Item(1, TransactionType.EXPENSE, new BigDecimal("12.5"), "Cafenea Stefan", day),
+                new ExistingTransactionsRequest.Item(2, TransactionType.INCOME, new BigDecimal("12.5"), "Cafenea Stefan", day),
+                new ExistingTransactionsRequest.Item(3, TransactionType.EXPENSE, new BigDecimal("12.6"), "Cafenea Stefan", day),
+                new ExistingTransactionsRequest.Item(4, TransactionType.EXPENSE, new BigDecimal("12.5"), "Cafenea Stefan",
+                        day.plusDays(1)))));
+
+        assertThat(response.indexes()).containsExactly(0);
+    }
 }

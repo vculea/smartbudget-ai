@@ -7,6 +7,7 @@ import { ApiError } from "../../../api/errors";
 import type { Category } from "../../../types";
 import { ImportFileError, type ImportDraft } from "./importParser";
 import {
+  existingDrafts,
   loadImport,
   memoryLessons,
   rememberedCategories,
@@ -213,6 +214,33 @@ const draft = (key: string, description: string, categoryId = ""): ImportDraft =
   description,
   transactionDate: "2030-01-01",
   categoryId,
+});
+
+describe("existingDrafts", () => {
+  it("trimite într-un singur apel doar rândurile valide și întoarce cheile celor existente", async () => {
+    const findExisting = vi.fn().mockResolvedValue([0, 2]);
+    const drafts = [
+      draft("a", " Cafea "),
+      { ...draft("b", "Fără sumă"), amount: "" },
+      draft("c", "Pâine"),
+    ];
+
+    const result = await existingDrafts(drafts, { findExisting });
+
+    expect(findExisting).toHaveBeenCalledTimes(1);
+    expect(findExisting).toHaveBeenCalledWith([
+      { index: 0, type: "EXPENSE", amount: 10, description: "Cafea", transactionDate: "2030-01-01" },
+      { index: 2, type: "EXPENSE", amount: 10, description: "Pâine", transactionDate: "2030-01-01" },
+    ]);
+    expect([...result.keys]).toEqual(["a", "c"]);
+    expect(result.failed).toBe(false);
+  });
+
+  it("nu blochează importul dacă verificarea eșuează", async () => {
+    const findExisting = vi.fn().mockRejectedValue(new ApiError("Oprit.", 503));
+    const result = await existingDrafts([draft("a", "Cafea")], { findExisting });
+    expect(result).toEqual({ keys: new Set(), failed: true });
+  });
 });
 
 describe("suggestMissingCategories", () => {

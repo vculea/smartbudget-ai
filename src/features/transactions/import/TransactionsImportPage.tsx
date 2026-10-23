@@ -47,6 +47,7 @@ import {
   type ImportDraft,
 } from "./importParser";
 import {
+  existingDrafts,
   loadImport,
   memoryLessons,
   rememberedCategories,
@@ -101,6 +102,8 @@ function useFitGridHeight(
 interface PreviewRow {
   draft: ImportDraft;
   included: boolean;
+  /** Rândul există deja în aplicație (același extras importat din nou). */
+  existing?: boolean;
 }
 
 export function TransactionsImportPage() {
@@ -123,6 +126,10 @@ export function TransactionsImportPage() {
   } | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [propagated, setPropagated] = useState<string | null>(null);
+  const [existingCheck, setExistingCheck] = useState<{
+    count: number;
+    failed: boolean;
+  } | null>(null);
   const rowsRef = useRef(rows);
   useLayoutEffect(() => {
     rowsRef.current = rows;
@@ -207,6 +214,7 @@ export function TransactionsImportPage() {
     setNotice(null);
     setCategoryError(null);
     setPropagated(null);
+    setExistingCheck(null);
     setProgress(null);
     setPhase("reading");
     try {
@@ -218,12 +226,28 @@ export function TransactionsImportPage() {
       setRows(loaded.drafts.map((draft) => ({ draft, included: true })));
       setPhase("idle");
 
-      // Mai întâi alegerile anterioare ale utilizatorului; AI-ul primește doar ce a rămas.
-      const remembered = await rememberedCategories(loaded.drafts);
+      // Un singur apel pentru dubluri, în paralel cu alegerile anterioare ale utilizatorului.
+      const [existing, remembered] = await Promise.all([
+        existingDrafts(loaded.drafts),
+        rememberedCategories(loaded.drafts),
+      ]);
       if (id !== runId.current) return;
+      if (existing.keys.size > 0) {
+        setRows(
+          (current) =>
+            current?.map((row) =>
+              existing.keys.has(row.draft.key)
+                ? { ...row, included: false, existing: true }
+                : row,
+            ) ?? null,
+        );
+      }
+      setExistingCheck({ count: existing.keys.size, failed: existing.failed });
       applySuggestions(remembered);
+      // AI-ul primește doar ce a rămas, fără rândurile care există deja.
       await runSuggestions(
         loaded.drafts.filter((draft) => {
+          if (existing.keys.has(draft.key)) return false;
           const categoryId = remembered.get(draft.key)?.categoryId;
           return !(categoryId && byId.get(categoryId)?.type === draft.type);
         }),
@@ -444,6 +468,20 @@ export function TransactionsImportPage() {
               />
             </Box>
           )}
+          {existingCheck && existingCheck.count > 0 && (
+            <Alert severity="warning" sx={{ mx: 2, mb: 2 }}>
+              {existingCheck.count === 1
+                ? "Un rând există deja în aplicație (aceeași dată, sumă, tip și descriere) și a fost debifat"
+                : `${existingCheck.count} rânduri există deja în aplicație (aceeași dată, sumă, tip și descriere) și au fost debifate`}
+              , ca să nu se dubleze. Bifează-le doar dacă sunt tranzacții noi.
+            </Alert>
+          )}
+          {existingCheck?.failed && (
+            <Alert severity="warning" sx={{ mx: 2, mb: 2 }}>
+              Nu am putut verifica dacă tranzacțiile există deja. Asigură-te că
+              nu imporți același extras de două ori.
+            </Alert>
+          )}
           {notice && (
             <Alert severity="info" sx={{ mx: 2, mb: 2 }}>
               {notice}
@@ -511,6 +549,7 @@ export function TransactionsImportPage() {
                     key={row.draft.key}
                     draft={row.draft}
                     included={row.included}
+                    existing={!!row.existing}
                     errors={errorsByKey.get(row.draft.key) ?? {}}
                     categories={categories}
                     onChange={updateDraft}
@@ -622,6 +661,7 @@ const checkboxCellSx = { "&&": { width: 64, pl: 1, pr: 1 } };
 interface PreviewTableRowProps {
   draft: ImportDraft;
   included: boolean;
+  existing: boolean;
   errors: DraftErrors;
   categories: Category[];
   onChange: (key: string, patch: Partial<ImportDraft>) => void;
@@ -631,6 +671,7 @@ interface PreviewTableRowProps {
 const PreviewTableRow = memo(function PreviewTableRow({
   draft,
   included,
+  existing,
   errors,
   categories,
   onChange,
@@ -679,7 +720,19 @@ const PreviewTableRow = memo(function PreviewTableRow({
           size="small"
           value={draft.description}
           error={!!show(errors.description)}
-          helperText={show(errors.description)}
+          helperText={
+            show(errors.description) ??
+            (existing ? (
+              <Chip
+                component="span"
+                size="small"
+                color="warning"
+                variant="outlined"
+                label="Există deja"
+                sx={{ height: 20 }}
+              />
+            ) : undefined)
+          }
           onChange={(e) => onChange(draft.key, { description: e.target.value })}
           slotProps={{ htmlInput: { "aria-label": label("Descriere") } }}
         />

@@ -6,11 +6,16 @@ import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.common.Money;
+import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -121,6 +126,53 @@ public class TransactionService {
         }
         repository.saveAll(toSave);
         return new BulkTransactionResponse(toSave.size());
+    }
+
+    /**
+     * The import rows that are already saved: same type, date, amount and description (ignoring case, diacritics and
+     * punctuation). Each saved transaction matches a single row, so a file with two identical rows and one saved
+     * transaction reports only the first row.
+     */
+    public ExistingTransactionsResponse findExisting(ExistingTransactionsRequest request) {
+        List<ExistingTransactionsRequest.Item> items = request.items();
+        // Only the exact days and amounts of the file: the (userId, transactionDate) index narrows the scan,
+        // the amount filter and the projection keep the result small.
+        Set<LocalDate> dates = new HashSet<>();
+        Set<BigDecimal> amounts = new HashSet<>();
+        for (ExistingTransactionsRequest.Item item : items) {
+            dates.add(item.transactionDate());
+            amounts.add(Money.scale(item.amount()));
+        }
+        Query query = new Query(Criteria.where("userId").is(currentUser.id())
+                .and("transactionDate").in(dates)
+                .and("amount").in(amounts));
+        query.fields().include("type", "amount", "description", "transactionDate");
+
+        Map<String, Integer> saved = new HashMap<>();
+        for (Transaction tx : mongoTemplate.find(query, Transaction.class)) {
+            saved.merge(duplicateKey(tx.getType(), tx.getTransactionDate(), tx.getAmount(), tx.getDescription()),
+                    1, Integer::sum);
+        }
+        List<Integer> indexes = new ArrayList<>();
+        for (ExistingTransactionsRequest.Item item : items) {
+            String key = duplicateKey(item.type(), item.transactionDate(), item.amount(), item.description());
+            Integer left = saved.get(key);
+            if (left != null && left > 0) {
+                saved.put(key, left - 1);
+                indexes.add(item.index());
+            }
+        }
+        return new ExistingTransactionsResponse(indexes);
+    }
+
+    static String duplicateKey(TransactionType type, LocalDate date, BigDecimal amount, String description) {
+        String text = description == null ? "" : Normalizer.normalize(description, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", " ")
+                .trim();
+        String value = amount == null ? "" : Money.scale(amount).toPlainString();
+        return type + "|" + date + "|" + value + "|" + text;
     }
 
     public TransactionResponse update(String id, TransactionRequest request) {

@@ -78,6 +78,15 @@ public class TransactionController {
         return service.createAll(request);
     }
 
+    @PostMapping("/import/existing")
+    @Operation(summary = "Find the import rows that are already saved",
+            description = "Used by the CSV/Excel import preview so the same statement is not imported twice. Max 1000 items. "
+                    + "A row matches a saved transaction with the same type, date, amount and description (ignoring case, "
+                    + "diacritics and punctuation); each saved transaction matches at most one row. Nothing is saved.")
+    public ExistingTransactionsResponse existing(@Valid @RequestBody ExistingTransactionsRequest request) {
+        return service.findExisting(request);
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Replace a transaction")
     public TransactionResponse update(@PathVariable String id, @Valid @RequestBody TransactionRequest request) {

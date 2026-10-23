@@ -112,6 +112,8 @@ Cu modelul local / cheia proprie, backendul construiește prompturile și valide
 
 În previzualizare poți corecta data, descrierea, tipul, categoria și suma sau debifa rânduri; categoria aleasă pentru un rând se pune și pe celelalte rânduri cu aceeași descriere pe care nu le-ai ales încă. **Adaugă N tranzacții** salvează tot printr-un singur apel `POST /transactions/bulk` (totul sau nimic).
 
+**Fără dubluri la reimport:** după citirea fișierului, toate rândurile sunt verificate printr-un singur apel `POST /transactions/import/existing` (în paralel cu categoriile învățate). Un rând există deja dacă are același tip, aceeași dată, sumă și descriere (fără diferențe de majuscule, diacritice sau punctuație) ca o tranzacție salvată; fiecare tranzacție salvată acoperă un singur rând, deci două cafele identice în aceeași zi, din care una e deja salvată, marchează doar un rând. Rândurile găsite sunt marcate „Există deja”, debifate și nu mai ajung la AI; le poți bifa la loc dacă sunt tranzacții noi. Backendul caută doar zilele și sumele exacte din fișier (indexul `userId + transactionDate`). Dacă verificarea nu reușește, importul continuă cu un avertisment.
+
 ### Categorii învățate
 
 La salvarea importului, aplicația reține categoria păstrată pentru fiecare comerciant (`POST /category-memory/learn`); la fel când adaugi o tranzacție de mână sau îi schimbi categoria. Comerciantul e identificat după cuvintele din descriere, fără cifre (card, sucursală, terminal), forme juridice (SRL, SA) și cuvinte de plată (POS, Plata la): „KAUFLAND 1234 CLUJ-NAPOCA SRL” devine `kaufland cluj napoca`, iar alte magazine („Kaufland Brașov”) sunt recunoscute după primul cuvânt.
@@ -185,7 +187,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `POST /category-memory/{match|learn}`, `GET|DELETE /category-memory` (+ `DELETE /category-memory/all`), `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/existing`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `POST /category-memory/{match|learn}`, `GET|DELETE /category-memory` (+ `DELETE /category-memory/all`), `GET /budgets?month=YYYY-MM`, `POST /budgets`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`.
 
 Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
 

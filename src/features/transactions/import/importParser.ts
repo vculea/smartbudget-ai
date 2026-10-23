@@ -2,6 +2,7 @@ import type {
   Category,
   ImportCategoryItem,
   ImportColumnMapping,
+  ImportExistingItem,
   IsoDate,
   TransactionInput,
   TransactionType,
@@ -616,4 +617,31 @@ export function toTransactionInput(draft: ImportDraft): TransactionInput {
     transactionDate: draft.transactionDate,
     categoryId: draft.categoryId,
   };
+}
+
+/**
+ * Rândurile cu dată, sumă și descriere valide, de verificat dacă există deja în aplicație;
+ * `index` e poziția rândului în `drafts`.
+ */
+export function existingCheckItems(drafts: ImportDraft[]): ImportExistingItem[] {
+  return drafts.flatMap((draft, index) => {
+    const description = draft.description.trim();
+    if (
+      !description ||
+      description.length > DESCRIPTION_MAX ||
+      !isRealIso(draft.transactionDate) ||
+      !amountField.safeParse(draft.amount).success
+    ) {
+      return [];
+    }
+    return [
+      {
+        index,
+        type: draft.type,
+        amount: parseAmount(draft.amount),
+        description,
+        transactionDate: draft.transactionDate,
+      },
+    ];
+  });
 }

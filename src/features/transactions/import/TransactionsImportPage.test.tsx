@@ -73,6 +73,42 @@ describe("TransactionsImportPage", () => {
     expect(screen.getByText("Import test fara categorie")).toBeInTheDocument();
   });
 
+  it("debifează rândurile care există deja când același fișier e importat din nou", async () => {
+    const user = userEvent.setup();
+    const file = () =>
+      new File(
+        [
+          "Data;Descriere;Suma;Categorie\n05.01.2030;Dublura salariu;5000;Salariu\n06.01.2030;Dublura cafea;-12,5;Alimente",
+        ],
+        "extras.csv",
+        { type: "text/csv" },
+      );
+    const first = renderImport();
+    await user.upload(screen.getByLabelText("Fișier de importat"), file());
+    const add = await screen.findByRole("button", { name: "Adaugă 2 tranzacții" });
+    await waitFor(() => expect(add).toBeEnabled());
+    await user.click(add);
+    expect(
+      await screen.findByText("Dublura salariu", undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    first.unmount();
+
+    renderImport();
+    await user.upload(screen.getByLabelText("Fișier de importat"), file());
+
+    expect(
+      await screen.findByText(/2 rânduri există deja în aplicație/, undefined, {
+        timeout: 3000,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Există deja")).toHaveLength(2);
+    expect(screen.getByRole("checkbox", { name: "Include rând 2" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Include rând 3" })).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Adaugă 0 tranzacții" }),
+    ).toBeDisabled();
+  });
+
   it("permite debifarea rândurilor invalide", async () => {
     const user = userEvent.setup();
     renderImport();
@@ -145,9 +181,9 @@ describe("TransactionsImportPage", () => {
 
   it("reține categoria corectată și o completează singură la importul următor", async () => {
     const user = userEvent.setup();
-    const file = () =>
+    const file = (day = "01") =>
       new File(
-        ["Data;Descriere;Suma\n01.01.2030;MEGA IMAGE 123 CLUJ;-50"],
+        [`Data;Descriere;Suma\n${day}.01.2030;MEGA IMAGE 123 CLUJ;-50`],
         "extras.csv",
         { type: "text/csv" },
       );
@@ -172,7 +208,8 @@ describe("TransactionsImportPage", () => {
     first.unmount();
 
     renderImport();
-    await user.upload(screen.getByLabelText("Fișier de importat"), file());
+    // altă zi: aceeași descriere, dar o tranzacție nouă (nu o dublură)
+    await user.upload(screen.getByLabelText("Fișier de importat"), file("08"));
     const again = await screen.findByRole("table", {
       name: "Previzualizare import",
     });

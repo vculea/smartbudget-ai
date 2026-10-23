@@ -294,6 +294,32 @@ export const mockTransactionsApi: TransactionsApi = {
     return { created: inputs.length };
   },
 
+  async findExisting(items) {
+    await delay();
+    const key = (t: {
+      type: string;
+      transactionDate: string;
+      amount: number;
+      description: string;
+    }) =>
+      [
+        t.type,
+        t.transactionDate,
+        round2(t.amount).toFixed(2),
+        normalize(t.description).replace(/[^a-z0-9]+/g, " ").trim(),
+      ].join("|");
+    const saved = new Map<string, number>();
+    for (const t of loadDb().transactions) {
+      saved.set(key(t), (saved.get(key(t)) ?? 0) + 1);
+    }
+    return items.flatMap((item) => {
+      const left = saved.get(key(item)) ?? 0;
+      if (left === 0) return [];
+      saved.set(key(item), left - 1);
+      return [item.index];
+    });
+  },
+
   async update(id, input) {
     await delay();
     const db = loadDb();

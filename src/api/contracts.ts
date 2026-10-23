@@ -14,6 +14,7 @@ import type {
   ImportCategoryItem,
   ImportCategorySuggestion,
   ImportColumnMapping,
+  ImportExistingItem,
   Page,
   RememberedMerchant,
   Transaction,
@@ -34,6 +35,11 @@ export interface TransactionsApi {
   create(input: TransactionInput): Promise<Transaction>;
   /** Salvează mai multe tranzacții deodată (import CSV/Excel); totul sau nimic. */
   createMany(inputs: TransactionInput[]): Promise<{ created: number }>;
+  /**
+   * Indicii rândurilor din import care există deja (același tip, dată, sumă și descriere);
+   * fiecare tranzacție salvată acoperă un singur rând. Maxim 1000 de rânduri.
+   */
+  findExisting(items: ImportExistingItem[]): Promise<number[]>;
   update(id: string, input: TransactionInput): Promise<Transaction>;
   remove(id: string): Promise<void>;
   /** Trimite poza unui bon către AI și întoarce tranzacția propusă (nesalvată). */
