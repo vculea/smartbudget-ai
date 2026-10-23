@@ -116,7 +116,8 @@ class TransactionImportAiServiceTest {
     void categoriesPromptListsCategoriesAndTransactions() {
         ImportAiPrompt prompt = service.categoriesPrompt(List.of(new ImportItem(7, "MEGA IMAGE", TransactionType.EXPENSE)));
 
-        assertThat(prompt.systemPrompt()).contains("\"id\":\"food\"").contains("Use null ONLY when");
+        assertThat(prompt.systemPrompt()).contains("\"id\":1").contains("\"name\":\"Alimente\"")
+                .doesNotContain("\"food\"").contains("Use null ONLY when");
         assertThat(prompt.userMessage()).contains("\"index\":7").contains("MEGA IMAGE").contains("EXPENSE");
     }
 
@@ -130,7 +131,31 @@ class TransactionImportAiServiceTest {
         assertThat(prompt.systemPrompt())
                 .contains("User's earlier choices (JSON):")
                 .contains("\"merchant\":\"glovo\"")
-                .contains("\"categoryId\":\"fun\"");
+                .contains("\"category\":2");
+    }
+
+    @Test
+    void mapsShortCategoryCodesBackToIds() {
+        List<ImportItem> items = List.of(
+                new ImportItem(0, "MEGA IMAGE", TransactionType.EXPENSE),
+                new ImportItem(1, "CINEMA", TransactionType.EXPENSE),
+                new ImportItem(2, "SALARIU", TransactionType.INCOME),
+                new ImportItem(3, "LIDL", TransactionType.EXPENSE),
+                new ImportItem(4, "XYZ", TransactionType.EXPENSE),
+                new ImportItem(5, "ABC", TransactionType.EXPENSE));
+
+        // Codes follow id order: food=1, fun=2, salary=3.
+        ImportCategorizeResponse response = service.categoriesResult("""
+                {"results": [
+                  {"index": 0, "category": 1},
+                  {"index": 1, "category": "2"},
+                  {"index": 2, "category": 3},
+                  {"index": 3, "category": 3},
+                  {"index": 4, "category": "null"},
+                  {"index": 5, "category": 9}]}""", items);
+
+        assertThat(response.suggestions()).extracting(ImportCategorizeResponse.Suggestion::categoryId)
+                .containsExactly("food", "fun", "salary", null, null, null);
     }
 
     @Test
