@@ -36,6 +36,11 @@ smartbudget:
     jwt-secret: ${JWT_SECRET:}
     token-ttl: ${AUTH_TOKEN_TTL:12h}
     allowed-emails: ${ALLOWED_EMAILS:}
+  drive:
+    client-id: ${GOOGLE_DRIVE_CLIENT_ID:}
+    client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:}
+    refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
+    folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
   ai:
     base-url: ${AI_BASE_URL:https://api.openai.com/v1}
     api-key: ${AI_API_KEY:}

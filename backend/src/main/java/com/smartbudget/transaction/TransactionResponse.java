@@ -14,10 +14,13 @@ public record TransactionResponse(
         String categoryId,
         String categoryName,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        String attachmentName,
+        String attachmentUrl) {
 
     public static TransactionResponse from(Transaction tx, String categoryName) {
         return new TransactionResponse(tx.getId(), tx.getType(), Money.scale(tx.getAmount()), tx.getDescription(),
-                tx.getTransactionDate(), tx.getCategoryId(), categoryName, tx.getCreatedAt(), tx.getUpdatedAt());
+                tx.getTransactionDate(), tx.getCategoryId(), categoryName, tx.getCreatedAt(), tx.getUpdatedAt(),
+                tx.getAttachmentName(), tx.getAttachmentUrl());
     }
 }

@@ -5,6 +5,7 @@ import type {
   CategoriesApi,
   CategoryMemoryApi,
   DashboardApi,
+  DriveApi,
   GoalsApi,
   TransactionImportAiApi,
   TransactionsApi,
@@ -389,6 +390,8 @@ export const mockTransactionsApi: TransactionsApi = {
       id,
       ...input,
       description: input.description.trim(),
+      attachmentName: db.transactions[index]?.attachmentName,
+      attachmentUrl: db.transactions[index]?.attachmentUrl,
     };
     db.transactions[index] = stored;
     saveDb(db);
@@ -403,6 +406,29 @@ export const mockTransactionsApi: TransactionsApi = {
       throw new ApiError("Tranzacția nu a fost găsită.", 404);
     db.transactions = db.transactions.filter((t) => t.id !== id);
     saveDb(db);
+  },
+
+  // Mock: nu urcă nimic nicăieri; doar reține numele fișierului ca să poată fi testat fluxul.
+  async attach(id, _file, fileName) {
+    await delay();
+    const db = loadDb();
+    const stored = db.transactions.find((t) => t.id === id);
+    if (!stored) throw new ApiError("Tranzacția nu a fost găsită.", 404);
+    stored.attachmentName = fileName;
+    stored.attachmentUrl = "https://drive.google.com/drive/my-drive";
+    saveDb(db);
+    return toTransaction(db, stored);
+  },
+
+  async detach(id) {
+    await delay();
+    const db = loadDb();
+    const stored = db.transactions.find((t) => t.id === id);
+    if (!stored) throw new ApiError("Tranzacția nu a fost găsită.", 404);
+    delete stored.attachmentName;
+    delete stored.attachmentUrl;
+    saveDb(db);
+    return toTransaction(db, stored);
   },
 
   // Mock: nu citește imaginea; propune o cheltuială de exemplu ca să poată fi testat fluxul.
@@ -778,6 +804,12 @@ export const mockBudgetPlanAiApi: BudgetPlanAiApi = {
       incomes,
       generatedAt: new Date().toISOString(),
     };
+  },
+};
+
+export const mockDriveApi: DriveApi = {
+  async status() {
+    return { enabled: true };
   },
 };
 

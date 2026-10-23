@@ -17,6 +17,19 @@ export const RECEIPT_FILE_ACCEPT =
 export const UNSUPPORTED_FILE_MESSAGE =
   "Fișierul nu este acceptat. Alege o poză (JPG, PNG, WebP, HEIC, AVIF, GIF, BMP) sau un PDF.";
 
+/** Limita backendului pentru fișierele salvate în Google Drive este 8 MB; rămâne o marjă pentru antetele cererii. */
+export const DRIVE_MAX_BYTES = 7_500_000;
+
+/**
+ * Fișierul care ajunge în Google Drive: originalul (PDF sau poză JPEG/PNG/WebP) când are tipul acceptat de backend
+ * și încape în limită; altfel o poză JPEG (HEIC/AVIF convertite, PDF-ul prea mare redus la prima pagină).
+ */
+export async function prepareReceiptForDrive(file: File): Promise<Blob> {
+  const accepted = file.type === "application/pdf" || NATIVE_TYPES.includes(file.type);
+  if (accepted && file.size <= DRIVE_MAX_BYTES) return file;
+  return prepareImageForUpload(file);
+}
+
 function fileName(file: Blob): string {
   return file instanceof File ? file.name : "";
 }

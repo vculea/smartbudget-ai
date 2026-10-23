@@ -7,6 +7,7 @@ import { getGoalDisplayStatus } from "../../utils/goal";
 import { httpAiInsightsApi, toAiInsightsResponse } from "./aiInsightsApi";
 import { httpBudgetPlanAiApi, httpBudgetsApi } from "./budgetsApi";
 import { httpDashboardApi } from "./dashboardApi";
+import { httpDriveApi } from "./driveApi";
 import { httpGoalsApi } from "./goalsApi";
 import { httpTransactionsApi } from "./transactionsApi";
 
@@ -108,6 +109,30 @@ describe("contract HTTP față de backend", () => {
       "delete /transactions/abc123",
     ]);
     expect(JSON.parse(String(calls[0]?.data))).toEqual(input);
+  });
+
+  it("trimite bonul în câmpul `file` și îl scoate cu DELETE, iar statusul Drive vine din /drive/status", async () => {
+    mockBackend((config) => ({
+      status: 200,
+      data: config.url === "/drive/status" ? { enabled: true } : { id: "abc123" },
+    }));
+
+    await httpTransactionsApi.attach(
+      "abc123",
+      new Blob(["%PDF-"], { type: "application/pdf" }),
+      "bon.pdf",
+    );
+    await httpTransactionsApi.detach("abc123");
+    const status = await httpDriveApi.status();
+
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "post /transactions/abc123/attachment",
+      "delete /transactions/abc123/attachment",
+      "get /drive/status",
+    ]);
+    const body = calls[0]?.data as FormData;
+    expect(body.get("file")).toBeInstanceOf(Blob);
+    expect(status).toEqual({ enabled: true });
   });
 
   it("trimite rândurile importului la verificarea dublurilor și întoarce indicii", async () => {

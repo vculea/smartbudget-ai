@@ -2,6 +2,11 @@ package com.smartbudget.common;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,7 +26,9 @@ import com.smartbudget.budget.BudgetController;
 import com.smartbudget.budget.BudgetService;
 import com.smartbudget.goal.GoalController;
 import com.smartbudget.goal.GoalService;
+import com.smartbudget.transaction.TransactionAttachmentService;
 import com.smartbudget.transaction.TransactionController;
+import com.smartbudget.transaction.TransactionResponse;
 import com.smartbudget.transaction.TransactionScanService;
 import com.smartbudget.transaction.TransactionService;
 import com.smartbudget.transaction.TransactionType;
@@ -31,6 +38,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -64,6 +72,8 @@ class ApiErrorHandlingTest {
     @MockitoBean
     private TransactionScanService transactionScanService;
     @MockitoBean
+    private TransactionAttachmentService transactionAttachmentService;
+    @MockitoBean
     private BudgetService budgetService;
     @MockitoBean
     private GoalService goalService;
@@ -84,6 +94,59 @@ class ApiErrorHandlingTest {
                 .andExpect(jsonPath("$.transactions[0].description").value("Kaufland"))
                 .andExpect(jsonPath("$.transactions[0].transactionDate").value("2026-10-20"))
                 .andExpect(jsonPath("$.transactions[0].categoryId").value("food"));
+    }
+
+    @Test
+    void attachmentUploadReturnsTheTransactionWithItsDriveLink() throws Exception {
+        when(transactionAttachmentService.attach(eq("tx1"), any())).thenReturn(new TransactionResponse("tx1",
+                TransactionType.EXPENSE, new BigDecimal("12.50"), "Kaufland", LocalDate.of(2026, 10, 20), "food",
+                "Alimente", null, null, "2026-10-20_Kaufland_12.50.pdf", "https://drive.google.com/file/d/f1/view"));
+
+        mvc.perform(multipart("/api/v1/transactions/tx1/attachment")
+                        .file(new MockMultipartFile("file", "bon.pdf", "application/pdf", new byte[] {1})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("tx1"))
+                .andExpect(jsonPath("$.attachmentName").value("2026-10-20_Kaufland_12.50.pdf"))
+                .andExpect(jsonPath("$.attachmentUrl").value("https://drive.google.com/file/d/f1/view"));
+    }
+
+    @Test
+    void attachmentWithoutFilePartReturns400() throws Exception {
+        mvc.perform(multipart("/api/v1/transactions/tx1/attachment"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("file")));
+    }
+
+    @Test
+    void attachmentFailuresAreReturnedAsControlledErrors() throws Exception {
+        when(transactionAttachmentService.attach(eq("tx1"), any()))
+                .thenThrow(new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Salvarea în Google Drive nu este configurată."));
+
+        mvc.perform(multipart("/api/v1/transactions/tx1/attachment")
+                        .file(new MockMultipartFile("file", "bon.pdf", "application/pdf", new byte[] {1})))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Salvarea în Google Drive nu este configurată."));
+    }
+
+    @Test
+    void deletingATransactionTrashesItsDriveFileAfterTheTransactionIsGone() throws Exception {
+        when(transactionAttachmentService.fileIdOf("tx1")).thenReturn("f1");
+
+        mvc.perform(delete("/api/v1/transactions/tx1")).andExpect(status().isNoContent());
+
+        InOrder order = inOrder(transactionService, transactionAttachmentService);
+        order.verify(transactionService).delete("tx1");
+        order.verify(transactionAttachmentService).trashQuietly("f1");
+    }
+
+    @Test
+    void failedDeleteLeavesTheDriveFileAlone() throws Exception {
+        when(transactionAttachmentService.fileIdOf("tx1")).thenReturn("f1");
+        doThrow(ApiException.notFound("Tranzacția nu există.")).when(transactionService).delete("tx1");
+
+        mvc.perform(delete("/api/v1/transactions/tx1")).andExpect(status().isNotFound());
+
+        verify(transactionAttachmentService, never()).trashQuietly(any());
     }
 
     @Test

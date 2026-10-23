@@ -99,6 +99,20 @@ AI_VISION_MODEL=gemma4:26b    # sau llava, llama3.2-vision, qwen2.5vl (ollama pu
 
 Fără `AI_VISION_MODEL` se folosește `AI_MODEL`. Citirea locală durează de obicei zeci de secunde (primul apel încarcă modelul); folosește `AI_READ_TIMEOUT=120s`. În modul demo, scanarea întoarce o tranzacție de exemplu.
 
+### Salvarea bonurilor în Google Drive
+
+Fișierul unui bon sau al unei facturi (PDF sau poză JPEG/PNG/WebP, max. 8 MB) se poate arhiva într-un **singur cont Google** ales de tine, în `SmartBudget/yyyy/MM/`, cu numele `2026-10-23_Kaufland_123.45.pdf`. În dialogul „Tranzacție nouă”, după **Completează din poză sau PDF**, apare bifa **Salvează fișierul în Google Drive**; la o tranzacție existentă, **Editează** permite atașarea, înlocuirea sau scoaterea fișierului. În listă, tranzacția cu fișier are o agrafă care deschide fișierul în Drive. Fără configurare, opțiunea nu apare deloc.
+
+Configurare (o singură dată, cu contul care va stoca fișierele):
+
+1. În <https://console.cloud.google.com> (același proiect ca la autentificare) activează **Google Drive API** (*APIs & Services → Library*).
+2. La *OAuth consent screen → Data access* adaugă scope-ul `https://www.googleapis.com/auth/drive.file` (aplicația vede doar fișierele create de ea, nu tot Drive-ul). Cât timp aplicația e în modul *Testing*, adaugă contul la *Test users*; în *Testing* refresh token-ul expiră după 7 zile, așa că treci aplicația la *In production* pentru un token de durată.
+3. Creează un **OAuth client ID** de tip *Web application* și adaugă la *Authorized redirect URIs* `https://developers.google.com/oauthplayground`.
+4. Deschide <https://developers.google.com/oauthplayground>, apasă ⚙ → bifează **Use your own OAuth credentials** și introdu ID-ul și secretul clientului. La *Step 1* scrie scope-ul `https://www.googleapis.com/auth/drive.file`, autorizează cu contul care stochează fișierele, apoi la *Step 2* apasă **Exchange authorization code for tokens** și copiază **Refresh token**.
+5. În `backend/.env` setează `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET` și `GOOGLE_DRIVE_REFRESH_TOKEN`, apoi `docker compose up -d`. Aplicația își creează singură folderul **SmartBudget** în „Drive-ul meu” (apoi `yyyy/MM` în el). `GOOGLE_DRIVE_FOLDER_ID` este opțional: cu scope-ul `drive.file` aplicația poate folosi doar foldere create de ea, deci un folder creat manual în Drive nu merge (ar cere scope-ul complet `drive`). Sunt **secrete**: există doar în backend, nu se comit și nu ajung în browser. Verificare: `GET /api/v1/drive/status` întoarce `{"enabled": true}`.
+
+Note: un *Service Account* nu poate scrie într-un Drive personal (nu are spațiu propriu), de aceea se folosește OAuth cu refresh token. Linkurile din Drive se deschid doar pentru conturile care au acces la fișier (în practică contul care stochează). La înlocuirea/scoaterea fișierului sau la ștergerea tranzacției, fișierul merge în coșul de gunoi din Drive (recuperabil 30 de zile). Dacă tokenul este revocat, salvarea întoarce o eroare clară și trebuie generat unul nou. În modul demo, salvarea este simulată.
+
 ### Import din CSV / Excel
 
 În **Tranzacții → Importă CSV / Excel** încarci un fișier `.csv` sau `.xlsx` (prima foaie, max. 5 MB și 1000 de rânduri). Fișierul se citește în browser, apoi **AI-ul ales în Setări AI** (server, model local sau cheie proprie):
@@ -144,7 +158,7 @@ Frontend (publice, compilate în bundle; **nu** conțin secrete). Pentru suprasc
 | `VITE_MOCK_LATENCY_MS` | `400`                                                         | latență simulată în modul demo                      |
 | `VITE_GOOGLE_CLIENT_ID` | – (în Docker vine din `GOOGLE_CLIENT_ID`)                    | ID-ul clientului OAuth pentru „Sign in with Google” |
 
-Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SEED_USER_ID`, `SWAGGER_ENABLED`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `AUTH_TOKEN_TTL`, `ALLOWED_EMAILS`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`. Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
+Backend (în `backend/.env`, citit de Docker Compose; vezi `backend/.env.example` și `backend/README.md`): `MONGO_USER`, `MONGO_PASSWORD`, `SPRING_PROFILES_ACTIVE`, `BACKEND_PORT`, `FRONTEND_PORT`, `CORS_ALLOWED_ORIGINS`, `SEED_ENABLED`, `SEED_USER_ID`, `SWAGGER_ENABLED`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `AUTH_TOKEN_TTL`, `ALLOWED_EMAILS`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`, `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN` (și opțional `GOOGLE_DRIVE_FOLDER_ID`). Cheia AI există doar în backend; frontendul apelează `POST /ai/insights`.
 
 ## Autentificare (doar cu contul Google)
 
@@ -187,7 +201,7 @@ src/
 
 Id-urile sunt string-uri (ObjectId MongoDB sau `demo-*`), sumele sunt numere cu max. 2 zecimale, datele `YYYY-MM-DD`, lunile `YYYY-MM`.
 
-`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST /transactions/bulk`, `POST /transactions/import/existing`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `POST /category-memory/{match|learn}`, `GET|DELETE /category-memory` (+ `DELETE /category-memory/all`), `GET /budgets?month=YYYY-MM`, `GET /budgets/income?month=YYYY-MM`, `POST /budgets`, `POST /budgets/year`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`, `POST /ai/budget-plan`.
+`GET /dashboard?month=YYYY-MM`, `GET|POST /transactions`, `POST /transactions/scan`, `POST|DELETE /transactions/{id}/attachment` (bon/factură în Google Drive), `GET /drive/status`, `POST /transactions/bulk`, `POST /transactions/import/existing`, `POST /transactions/import/{columns|categories}` (+ `/prompt`, `/result`), `PUT|DELETE /transactions/{id}`, `GET|POST /categories`, `PUT|DELETE /categories/{id}` (`DELETE` cu `?replacementId=` dacă e folosită), `GET /categories/{id}/usage`, `POST /category-memory/{match|learn}`, `GET|DELETE /category-memory` (+ `DELETE /category-memory/all`), `GET /budgets?month=YYYY-MM`, `GET /budgets/income?month=YYYY-MM`, `POST /budgets`, `POST /budgets/year`, `GET|POST /goals`, `POST /goals/{id}/contributions`, `POST /ai/insights`, `POST /ai/budget-plan`.
 
 Dashboardul, bugetele și AI Coach pot fi cerute și pe un an întreg: `GET /dashboard?year=YYYY`, `GET /budgets?year=YYYY` (limitele lunare ale fiecărei categorii sunt însumate pe an) și `POST /ai/insights` cu `{ "year": 2026 }`. `month` și `year` nu pot fi trimise împreună.
 

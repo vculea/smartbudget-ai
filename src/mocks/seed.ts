@@ -20,6 +20,8 @@ export interface StoredTransaction {
   description: string;
   transactionDate: IsoDate;
   categoryId: string;
+  attachmentName?: string | null;
+  attachmentUrl?: string | null;
 }
 
 export interface StoredBudget {

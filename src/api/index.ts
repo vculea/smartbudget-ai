@@ -6,6 +6,7 @@ import {
   mockCategoriesApi,
   mockCategoryMemoryApi,
   mockDashboardApi,
+  mockDriveApi,
   mockGoalsApi,
   mockTransactionImportAiApi,
   mockTransactionsApi,
@@ -17,6 +18,7 @@ import type {
   CategoriesApi,
   CategoryMemoryApi,
   DashboardApi,
+  DriveApi,
   GoalsApi,
   TransactionImportAiApi,
   TransactionsApi,
@@ -26,6 +28,7 @@ import { httpBudgetPlanAiApi, httpBudgetsApi } from "./services/budgetsApi";
 import { httpCategoriesApi } from "./services/categoriesApi";
 import { httpCategoryMemoryApi } from "./services/categoryMemoryApi";
 import { httpDashboardApi } from "./services/dashboardApi";
+import { httpDriveApi } from "./services/driveApi";
 import { httpGoalsApi } from "./services/goalsApi";
 import { httpImportAiApi } from "./services/importAiApi";
 import { httpTransactionsApi } from "./services/transactionsApi";
@@ -81,6 +84,7 @@ export const budgetPlanAiApi: BudgetPlanAiApi = env.demoMode
           ? localBudgetPlanAiApi.suggest(year)
           : httpBudgetPlanAiApi.suggest(year),
     };
+export const driveApi: DriveApi = env.demoMode ? mockDriveApi : httpDriveApi;
 export const goalsApi: GoalsApi = env.demoMode ? mockGoalsApi : httpGoalsApi;
 export const aiInsightsApi: AiInsightsApi = env.demoMode
   ? mockAiInsightsApi

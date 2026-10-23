@@ -49,6 +49,15 @@ export interface TransactionsApi {
   remove(id: string): Promise<void>;
   /** Trimite poza unui bon / extras către AI și întoarce tranzacțiile propuse (nesalvate, cel puțin una). */
   scan(image: Blob, options?: ScanOptions): Promise<TransactionScan[]>;
+  /** Salvează bonul / factura (PDF sau poză, max 8 MB) în Google Drive și îl leagă de tranzacție; înlocuiește fișierul anterior. */
+  attach(id: string, file: Blob, fileName: string): Promise<Transaction>;
+  /** Scoate fișierul din tranzacție (în Drive ajunge în coșul de gunoi, recuperabil 30 de zile). */
+  detach(id: string): Promise<Transaction>;
+}
+
+export interface DriveApi {
+  /** `enabled` este fals când backendul nu are configurat contul Google Drive. */
+  status(): Promise<{ enabled: boolean }>;
 }
 
 export interface TransactionImportAiApi {

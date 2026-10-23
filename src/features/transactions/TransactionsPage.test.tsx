@@ -125,6 +125,95 @@ describe("TransactionsPage", () => {
     expect(await screen.findByText("Bon scanat corectat")).toBeInTheDocument();
   });
 
+  it("salvează fișierul scanat în Google Drive și afișează agrafa în listă", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<TransactionsPage />);
+    await findTable();
+
+    await user.click(screen.getByRole("button", { name: "Adaugă tranzacție" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Tranzacție nouă",
+    });
+    await user.upload(
+      within(dialog).getByTestId("receipt-input"),
+      new File(["x"], "bon-drive.jpg", { type: "image/jpeg" }),
+    );
+    const driveOption = await within(dialog).findByRole(
+      "checkbox",
+      { name: /Salvează fișierul „bon-drive.jpg” în Google Drive/ },
+      { timeout: 5000 },
+    );
+    expect(driveOption).toBeChecked();
+    await waitFor(
+      () =>
+        expect(
+          within(dialog).getByRole("textbox", { name: /Descriere/ }),
+        ).toHaveValue("Bon exemplu (mod demo) - cumpărături"),
+      { timeout: 5000 },
+    );
+    const description = within(dialog).getByRole("textbox", {
+      name: /Descriere/,
+    });
+    await user.clear(description);
+    await user.type(description, "Bon cu fisier in Drive");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Adaugă tranzacția" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByRole(
+        "link",
+        { name: "Deschide bonul Bon cu fisier in Drive" },
+        { timeout: 3000 },
+      ),
+    ).toHaveAttribute("href", "https://drive.google.com/drive/my-drive");
+  });
+
+  it("nu urcă fișierul în Drive când opțiunea este debifată", async () => {
+    const attachSpy = vi.spyOn(transactionsApi, "attach");
+    try {
+      const user = userEvent.setup();
+      renderWithProviders(<TransactionsPage />);
+      await findTable();
+
+      await user.click(screen.getByRole("button", { name: "Adaugă tranzacție" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Tranzacție nouă",
+      });
+      await user.upload(
+        within(dialog).getByTestId("receipt-input"),
+        new File(["x"], "bon-local.jpg", { type: "image/jpeg" }),
+      );
+      await user.click(
+        await within(dialog).findByRole(
+          "checkbox",
+          { name: /în Google Drive/ },
+          { timeout: 5000 },
+        ),
+      );
+      await waitFor(
+        () =>
+          expect(
+            within(dialog).getByRole("textbox", { name: /Sumă/ }),
+          ).toHaveValue("87.5"),
+        { timeout: 5000 },
+      );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Adaugă tranzacția" }),
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      expect(attachSpy).not.toHaveBeenCalled();
+    } finally {
+      attachSpy.mockRestore();
+    }
+  });
+
   it("din poza cu mai multe tranzacții le salvează deodată pe cele bifate", async () => {
     const scanSpy = vi.spyOn(transactionsApi, "scan").mockResolvedValue([
       {

@@ -13,6 +13,9 @@ export interface Transaction {
   categoryName?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** Bonul / factura arhivată în Google Drive (lipsesc când tranzacția nu are fișier). */
+  attachmentName?: string | null;
+  attachmentUrl?: string | null;
 }
 
 /** Corp pentru `POST /transactions` și `PUT /transactions/{id}`. */

@@ -25,6 +25,34 @@ public class Transaction {
     private String categoryId;
     private Instant createdAt;
     private Instant updatedAt;
+    /** Receipt / invoice archived in Google Drive (all three null when there is none). */
+    private String attachmentFileId;
+    private String attachmentName;
+    private String attachmentUrl;
+
+    public String getAttachmentFileId() {
+        return attachmentFileId;
+    }
+
+    public void setAttachmentFileId(String attachmentFileId) {
+        this.attachmentFileId = attachmentFileId;
+    }
+
+    public String getAttachmentName() {
+        return attachmentName;
+    }
+
+    public void setAttachmentName(String attachmentName) {
+        this.attachmentName = attachmentName;
+    }
+
+    public String getAttachmentUrl() {
+        return attachmentUrl;
+    }
+
+    public void setAttachmentUrl(String attachmentUrl) {
+        this.attachmentUrl = attachmentUrl;
+    }
 
     public String getId() {
         return id;

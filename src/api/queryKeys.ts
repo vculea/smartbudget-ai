@@ -12,4 +12,5 @@ export const queryKeys = {
   budgetList: (period: Period) => ["budgets", period] as const,
   incomePlanList: (period: Period) => ["budgets", "income", period] as const,
   goals: ["goals"] as const,
+  drive: ["drive"] as const,
 };

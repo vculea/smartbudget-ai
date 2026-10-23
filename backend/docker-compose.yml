@@ -40,6 +40,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL:-12h}
       ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${GOOGLE_DRIVE_REFRESH_TOKEN:-}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     # Permite apelarea unui Ollama rulat pe gazdă (http://host.docker.internal:11434/v1) și pe Linux

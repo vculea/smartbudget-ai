@@ -2,10 +2,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   InputAdornment,
   LinearProgress,
   MenuItem,
@@ -35,8 +37,14 @@ import {
   requiredText,
 } from "../../utils/validation";
 import { useCategories } from "../categories/useCategories";
-import { useSaveTransaction, useScanTransaction } from "./hooks";
+import {
+  useAttachReceipt,
+  useDriveEnabled,
+  useSaveTransaction,
+  useScanTransaction,
+} from "./hooks";
 import { ScannedTransactionsReview } from "./ScannedTransactionsReview";
+import { TransactionReceiptSection } from "./TransactionReceiptSection";
 
 const DESCRIPTION_MAX = 120;
 
@@ -113,9 +121,13 @@ function TransactionForm({
   } = useCategories();
   const save = useSaveTransaction();
   const scan = useScanTransaction();
+  const attach = useAttachReceipt();
+  const driveEnabled = useDriveEnabled();
   const aiMode = useAiSettings().mode;
   const fileInput = useRef<HTMLInputElement>(null);
   const scanAbort = useRef<AbortController | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [saveToDrive, setSaveToDrive] = useState(true);
   const [scanned, setScanned] = useState<TransactionScan | null>(null);
   const [review, setReview] = useState<TransactionScan[] | null>(null);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
@@ -166,6 +178,7 @@ function TransactionForm({
 
   const handleFileSelected = async (file: File | undefined) => {
     if (!file) return;
+    setReceiptFile(file);
     setScanned(null);
     setProgress(null);
     scanAbort.current?.abort();
@@ -213,7 +226,7 @@ function TransactionForm({
 
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await save.mutateAsync({
+      const saved = await save.mutateAsync({
         id: transaction?.id,
         input: {
           type: values.type,
@@ -223,6 +236,12 @@ function TransactionForm({
           categoryId: values.categoryId,
         },
       });
+      if (!transaction && receiptFile && saveToDrive && driveEnabled) {
+        // Tranzacția este deja salvată; dacă fișierul nu urcă, hook-ul arată eroarea și dialogul se închide oricum.
+        await attach
+          .mutateAsync({ id: saved.id, file: receiptFile })
+          .catch(() => undefined);
+      }
       onClose();
     } catch (error) {
       if (error instanceof ApiError && error.fieldErrors) {
@@ -316,7 +335,25 @@ function TransactionForm({
                   , apoi adaugă tranzacția.
                 </Alert>
               )}
+              {driveEnabled && receiptFile && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={saveToDrive}
+                      onChange={(event) => setSaveToDrive(event.target.checked)}
+                    />
+                  }
+                  label={`Salvează fișierul „${receiptFile.name}” în Google Drive`}
+                />
+              )}
             </>
+          )}
+
+          {transaction && (driveEnabled || transaction.attachmentUrl) && (
+            <TransactionReceiptSection
+              transaction={transaction}
+              driveEnabled={driveEnabled}
+            />
           )}
 
           <Controller
@@ -424,9 +461,9 @@ function TransactionForm({
         <Button
           type="submit"
           variant="contained"
-          disabled={save.isPending || scan.isPending}
+          disabled={save.isPending || attach.isPending || scan.isPending}
         >
-          {save.isPending
+          {save.isPending || attach.isPending
             ? "Se salvează..."
             : transaction
               ? "Salvează modificările"

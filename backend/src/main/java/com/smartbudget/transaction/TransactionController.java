@@ -30,10 +30,30 @@ public class TransactionController {
 
     private final TransactionService service;
     private final TransactionScanService scanService;
+    private final TransactionAttachmentService attachmentService;
 
-    public TransactionController(TransactionService service, TransactionScanService scanService) {
+    public TransactionController(TransactionService service, TransactionScanService scanService,
+                                 TransactionAttachmentService attachmentService) {
         this.service = service;
         this.scanService = scanService;
+        this.attachmentService = attachmentService;
+    }
+
+    @PostMapping(value = "/{id}/attachment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Save the receipt / invoice of a transaction in Google Drive",
+            description = "Multipart field 'file' (PDF, JPEG, PNG or WebP, max 8 MB). Stored under <root>/yyyy/MM in the "
+                    + "configured Google account; replaces (and trashes) a previous attachment. Returns the transaction with "
+                    + "attachmentName and attachmentUrl. Errors: 413 too large, 415 wrong type, 502/503/504 Drive problems, "
+                    + "503 when GOOGLE_DRIVE_* is not configured.")
+    public TransactionResponse attach(@PathVariable String id, @RequestPart("file") MultipartFile file) {
+        return attachmentService.attach(id, file);
+    }
+
+    @DeleteMapping("/{id}/attachment")
+    @Operation(summary = "Remove the receipt of a transaction",
+            description = "Unlinks the file and moves it to the Google Drive trash (recoverable for 30 days).")
+    public TransactionResponse detach(@PathVariable String id) {
+        return attachmentService.detach(id);
     }
 
     @PostMapping(value = "/scan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -99,6 +119,8 @@ public class TransactionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Delete a transaction")
     public void delete(@PathVariable String id) {
+        String fileId = attachmentService.fileIdOf(id);
         service.delete(id);
+        attachmentService.trashQuietly(fileId);
     }
 }

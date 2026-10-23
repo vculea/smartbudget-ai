@@ -54,4 +54,20 @@ export const httpTransactionsApi: TransactionsApi = {
     );
     return data.transactions;
   },
+  async attach(id, file, fileName) {
+    const body = new FormData();
+    body.append("file", file, fileName);
+    const { data } = await http.post<Transaction>(
+      `/transactions/${id}/attachment`,
+      body,
+      { timeout: 60_000, headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
+  async detach(id) {
+    const { data } = await http.delete<Transaction>(
+      `/transactions/${id}/attachment`,
+    );
+    return data;
+  },
 };

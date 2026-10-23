@@ -13,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Paperclip, Trash2 } from "lucide-react";
 import type {
   Category,
   SortDirection,
@@ -21,6 +21,7 @@ import type {
   TransactionSortField,
 } from "../../types";
 import { formatDate } from "../../utils/date";
+import { isDriveLink } from "./driveLink";
 import { TransactionAmount } from "./TransactionAmount";
 
 interface TransactionsTableProps {
@@ -127,6 +128,20 @@ export function TransactionsTable({
                   <TransactionAmount type={tx.type} amount={tx.amount} />
                 </TableCell>
                 <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                  {isDriveLink(tx.attachmentUrl) && (
+                    <Tooltip title="Deschide bonul din Google Drive">
+                      <IconButton
+                        size="small"
+                        component="a"
+                        href={tx.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Deschide bonul ${tx.description}`}
+                      >
+                        <Paperclip size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   <Tooltip title="Editează">
                     <IconButton
                       size="small"

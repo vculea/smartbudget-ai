@@ -3,12 +3,15 @@ package com.smartbudget;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,12 +31,15 @@ import com.smartbudget.category.DefaultCategories;
 import com.smartbudget.common.ApiException;
 import com.smartbudget.config.CategoryOwnershipMigration;
 import com.smartbudget.config.DemoDataSeeder;
+import com.smartbudget.drive.DriveFile;
+import com.smartbudget.drive.DriveStorage;
 import com.smartbudget.goal.GoalContributionRepository;
 import com.smartbudget.goal.SavingsGoalRepository;
 import com.smartbudget.transaction.Transaction;
 import com.smartbudget.transaction.TransactionRepository;
 import com.smartbudget.transaction.TransactionType;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -51,6 +57,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -89,6 +96,8 @@ class ApiIntegrationTest {
     GoalContributionRepository contributions;
     @MockitoBean
     AiAnalysisService ai;
+    @MockitoBean
+    DriveStorage drive;
 
     @BeforeEach
     void cleanDatabase() {
@@ -699,6 +708,47 @@ class ApiIntegrationTest {
         mvc.perform(post("/api/v1/auth/google").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"credential\":\"x\"}"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void receiptsAreArchivedInDriveAndFollowTheTransactionLifecycle() throws Exception {
+        when(drive.isEnabled()).thenReturn(true);
+        when(drive.upload(any(), any(), any(), any()))
+                .thenReturn(new DriveFile("f1", "2026-09-10_Mine_42.50.pdf", "https://drive.google.com/file/d/f1/view"))
+                .thenReturn(new DriveFile("f2", "2026-09-10_Mine_42.50.pdf", "https://drive.google.com/file/d/f2/view"));
+        String id = createTransaction("EXPENSE", "42.50", "Mine", "2026-09-10", "food");
+        MockMultipartFile pdf = new MockMultipartFile("file", "bon.pdf", "application/pdf",
+                "%PDF-1.4 x".getBytes(StandardCharsets.UTF_8));
+
+        mvc.perform(get("/api/v1/drive/status")).andExpect(jsonPath("$.enabled").value(true));
+        mvc.perform(multipart("/api/v1/transactions/" + id + "/attachment").file(pdf).with(user("user-2")))
+                .andExpect(status().isNotFound());
+        verify(drive, never()).upload(any(), any(), any(), any());
+
+        mvc.perform(multipart("/api/v1/transactions/" + id + "/attachment").file(pdf))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachmentUrl").value("https://drive.google.com/file/d/f1/view"))
+                .andExpect(jsonPath("$.categoryName").value("Alimente"));
+        verify(drive).upload("2026-09-10_Mine_42.50.pdf", "application/pdf",
+                "%PDF-1.4 x".getBytes(StandardCharsets.UTF_8), LocalDate.of(2026, 9, 10));
+        mvc.perform(get("/api/v1/transactions"))
+                .andExpect(jsonPath("$.content[0].attachmentName").value("2026-09-10_Mine_42.50.pdf"));
+
+        // editing keeps the receipt; replacing it trashes the previous file
+        mvc.perform(put("/api/v1/transactions/" + id).contentType(MediaType.APPLICATION_JSON)
+                        .content(transactionJson("EXPENSE", "42.50", "Mine", "2026-09-10", "food")))
+                .andExpect(jsonPath("$.attachmentUrl").value("https://drive.google.com/file/d/f1/view"));
+        mvc.perform(multipart("/api/v1/transactions/" + id + "/attachment").file(pdf)).andExpect(status().isOk());
+        verify(drive).trash("f1");
+
+        mvc.perform(delete("/api/v1/transactions/" + id + "/attachment"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachmentUrl").doesNotExist());
+        verify(drive).trash("f2");
+
+        mvc.perform(multipart("/api/v1/transactions/" + id + "/attachment").file(pdf)).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/transactions/" + id)).andExpect(status().isNoContent());
+        verify(drive, Mockito.times(2)).trash("f2");
     }
 
     @Test

@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import {
   categoryMemoryApi,
+  driveApi,
   getErrorMessage,
   queryKeys,
   transactionsApi,
@@ -17,13 +18,56 @@ import type {
   TransactionInput,
   TransactionQuery,
 } from "../../types";
-import { prepareImageForUpload } from "../../utils/image";
+import { prepareImageForUpload, prepareReceiptForDrive } from "../../utils/image";
 
 export function useTransactionsQuery(query: TransactionQuery) {
   return useQuery({
     queryKey: queryKeys.transactionList(query),
     queryFn: () => transactionsApi.list(query),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Dacă backendul are configurat contul Google Drive; fără el, opțiunile de salvare a bonului nu se afișează. */
+export function useDriveEnabled(): boolean {
+  const { data } = useQuery({
+    queryKey: queryKeys.drive,
+    queryFn: () => driveApi.status(),
+    staleTime: Infinity,
+    retry: false,
+  });
+  return data?.enabled === true;
+}
+
+/** Salvează bonul / factura unei tranzacții în Google Drive (înlocuiește fișierul anterior). */
+export function useAttachReceipt() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) =>
+      transactionsApi.attach(id, await prepareReceiptForDrive(file), file.name),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions });
+      toast.success("Fișierul a fost salvat în Google Drive.");
+    },
+    onError: (error) =>
+      toast.error(
+        getErrorMessage(error, "Fișierul nu a putut fi salvat în Google Drive."),
+      ),
+  });
+}
+
+export function useDetachReceipt() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (id: string) => transactionsApi.detach(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.transactions });
+      toast.success("Fișierul a fost scos din tranzacție.");
+    },
+    onError: (error) =>
+      toast.error(getErrorMessage(error, "Fișierul nu a putut fi scos.")),
   });
 }
 
