@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
+import com.smartbudget.category.CategoryMemoryMatchResponse;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryResponse;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -25,11 +27,13 @@ class LocalAiServiceTest {
 
     private final DashboardService dashboard = mock(DashboardService.class);
     private final CategoryService categories = mock(CategoryService.class);
+    private final CategoryMemoryService categoryMemory = mock(CategoryMemoryService.class);
     private LocalAiService service;
 
     @BeforeEach
     void setUp() {
-        service = new LocalAiService(dashboard, categories, AiTestData.MAPPER, TestClock.FIXED);
+        service = new LocalAiService(dashboard, categories, new ReceiptScanCategoryMemory(categoryMemory),
+                AiTestData.MAPPER, TestClock.FIXED);
     }
 
     @Test
@@ -93,10 +97,12 @@ class LocalAiServiceTest {
     void receiptResultParsesAndValidatesTheAnswer() {
         when(categories.list()).thenReturn(List.of(
                 new CategoryResponse("food", "Alimente", TransactionType.EXPENSE, "#fff", "cart")));
+        when(categoryMemory.match(org.mockito.ArgumentMatchers.anyList())).thenReturn(new CategoryMemoryMatchResponse(
+                List.of(new CategoryMemoryMatchResponse.Suggestion(0, "food"))));
 
         ReceiptScan scan = service.receiptResult(
                 "{\"transactions\":[{\"type\":\"EXPENSE\",\"amount\":\"12,50\",\"description\":\"Lidl\","
-                        + "\"transactionDate\":\"2026-10-20\",\"categoryId\":\"food\"}]}").transactions().get(0);
+                        + "\"transactionDate\":\"2026-10-20\",\"categoryId\":null}]}").transactions().get(0);
 
         assertThat(scan.amount()).isEqualByComparingTo("12.50");
         assertThat(scan.categoryId()).isEqualTo("food");

@@ -3,6 +3,7 @@ package com.smartbudget.transaction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -10,8 +11,12 @@ import static org.mockito.Mockito.when;
 
 import com.smartbudget.TestClock;
 import com.smartbudget.ai.ReceiptScan;
+import com.smartbudget.ai.ReceiptScanCategoryMemory;
 import com.smartbudget.ai.ReceiptScanResult;
 import com.smartbudget.ai.ReceiptScanner;
+import com.smartbudget.category.CategoryMemoryMatchRequest;
+import com.smartbudget.category.CategoryMemoryMatchResponse;
+import com.smartbudget.category.CategoryMemoryService;
 import com.smartbudget.category.CategoryResponse;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -30,14 +35,23 @@ class TransactionScanServiceTest {
     private static final byte[] WEBP = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P'};
 
     private ReceiptScanner scanner;
+    private CategoryMemoryService categoryMemory;
     private CategoryService categories;
     private TransactionScanService service;
 
     @BeforeEach
     void setUp() {
         scanner = mock(ReceiptScanner.class);
+        categoryMemory = mock(CategoryMemoryService.class);
         categories = mock(CategoryService.class);
-        service = new TransactionScanService(scanner, categories, TestClock.FIXED);
+        when(categoryMemory.match(anyList())).thenAnswer(invocation -> {
+            List<CategoryMemoryMatchRequest.Item> items = invocation.getArgument(0);
+            return new CategoryMemoryMatchResponse(items.stream()
+                    .map(item -> new CategoryMemoryMatchResponse.Suggestion(item.index(), null))
+                    .toList());
+        });
+        service = new TransactionScanService(scanner, new ReceiptScanCategoryMemory(categoryMemory), categories,
+                TestClock.FIXED);
     }
 
     @Test
@@ -52,6 +66,25 @@ class TransactionScanServiceTest {
 
         assertThat(result).isSameAs(expected);
         verify(scanner).scan(JPEG, "image/jpeg", list, LocalDate.of(2026, 10, 22));
+    }
+
+    @Test
+    void appliesRememberedCategoryToScannedTransaction() {
+        List<CategoryResponse> list = List.of(
+                new CategoryResponse("food", "Alimente", TransactionType.EXPENSE, "#fff", "cart"));
+        ReceiptScan scanned = new ReceiptScan(TransactionType.EXPENSE, new BigDecimal("10.00"),
+                "Kaufland Romania SCS", LocalDate.of(2026, 10, 20), "fuel");
+        when(categories.list()).thenReturn(list);
+        when(scanner.scan(any(), any(), any(), any())).thenReturn(new ReceiptScanResult(List.of(scanned)));
+        when(categoryMemory.match(any())).thenReturn(new CategoryMemoryMatchResponse(
+                List.of(new CategoryMemoryMatchResponse.Suggestion(0, "food"))));
+
+        ReceiptScan result = service.scan(new MockMultipartFile("image", "bon.jpg", "image/jpeg", JPEG))
+                .transactions().get(0);
+
+        assertThat(result.categoryId()).isEqualTo("food");
+        verify(categoryMemory).match(List.of(
+                new CategoryMemoryMatchRequest.Item(0, "Kaufland Romania SCS", TransactionType.EXPENSE)));
     }
 
     @Test

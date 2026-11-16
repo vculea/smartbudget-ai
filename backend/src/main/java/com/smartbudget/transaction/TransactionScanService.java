@@ -1,6 +1,7 @@
 package com.smartbudget.transaction;
 
 import com.smartbudget.ai.ReceiptScanResult;
+import com.smartbudget.ai.ReceiptScanCategoryMemory;
 import com.smartbudget.ai.ReceiptScanner;
 import com.smartbudget.category.CategoryService;
 import com.smartbudget.common.ApiException;
@@ -18,11 +19,14 @@ public class TransactionScanService {
     public static final long MAX_IMAGE_BYTES = 8L * 1024 * 1024;
 
     private final ReceiptScanner scanner;
+    private final ReceiptScanCategoryMemory categoryMemory;
     private final CategoryService categoryService;
     private final Clock clock;
 
-    public TransactionScanService(ReceiptScanner scanner, CategoryService categoryService, Clock clock) {
+    public TransactionScanService(ReceiptScanner scanner, ReceiptScanCategoryMemory categoryMemory,
+                                  CategoryService categoryService, Clock clock) {
         this.scanner = scanner;
+        this.categoryMemory = categoryMemory;
         this.categoryService = categoryService;
         this.clock = clock;
     }
@@ -44,7 +48,7 @@ public class TransactionScanService {
         if (mimeType == null) {
             throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Sunt acceptate doar imagini JPEG, PNG sau WebP.");
         }
-        return scanner.scan(bytes, mimeType, categoryService.list(), LocalDate.now(clock));
+        return categoryMemory.apply(scanner.scan(bytes, mimeType, categoryService.list(), LocalDate.now(clock)));
     }
 
     /** Detects the type from the file signature; the client-declared content type is not trusted. */

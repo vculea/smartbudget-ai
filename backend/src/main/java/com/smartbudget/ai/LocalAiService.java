@@ -20,13 +20,15 @@ public class LocalAiService {
 
     private final DashboardService dashboardService;
     private final CategoryService categoryService;
+    private final ReceiptScanCategoryMemory receiptScanCategoryMemory;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     public LocalAiService(DashboardService dashboardService, CategoryService categoryService,
-            ObjectMapper objectMapper, Clock clock) {
+            ReceiptScanCategoryMemory receiptScanCategoryMemory, ObjectMapper objectMapper, Clock clock) {
         this.dashboardService = dashboardService;
         this.categoryService = categoryService;
+        this.receiptScanCategoryMemory = receiptScanCategoryMemory;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -51,8 +53,8 @@ public class LocalAiService {
     }
 
     public ReceiptScanResult receiptResult(String content) {
-        return OpenAiCompatibleReceiptScanner.parse(objectMapper, content, categoryService.list(),
-                LocalDate.now(clock));
+        return receiptScanCategoryMemory.apply(OpenAiCompatibleReceiptScanner.parse(objectMapper, content,
+                categoryService.list(), LocalDate.now(clock)));
     }
 
     private DashboardResponse dashboard(AiInsightsRequest period) {
