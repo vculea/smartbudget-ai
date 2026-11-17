@@ -65,19 +65,27 @@ export async function loadImport(
   }
   if (aiMapping) {
     let checked = checkMapping(rows, aiMapping);
-    // Titlul explicit al coloanei de descriere (Descriere, Comerciant...) bate alegerea AI-ului, care poate greși între rulări.
     const byHeader = detectColumnsByHeader(rows);
-    if (
-      checked &&
-      byHeader?.description != null &&
-      byHeader.description !== checked.description
-    ) {
-      // Separatorul ales de AI se referea la coloana greșită; se deduce din coloana corectă.
+    if (checked && byHeader) {
+      const hasDirectionColumns =
+        byHeader.debit != null || byHeader.credit != null;
       checked =
         checkMapping(rows, {
           ...checked,
-          description: byHeader.description,
-          descriptionCutAt: null,
+          date: byHeader.date ?? checked.date,
+          description: byHeader.description ?? checked.description,
+          amount: hasDirectionColumns
+            ? null
+            : (byHeader.amount ?? checked.amount),
+          debit: byHeader.debit ?? checked.debit,
+          credit: byHeader.credit ?? checked.credit,
+          type: byHeader.type ?? checked.type,
+          category: byHeader.category ?? checked.category,
+          descriptionCutAt:
+            byHeader.description != null &&
+            byHeader.description !== checked.description
+              ? null
+              : checked.descriptionCutAt,
         }) ?? checked;
     }
     if (checked) {

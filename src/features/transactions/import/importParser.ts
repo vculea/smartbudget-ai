@@ -63,6 +63,7 @@ const HEADERS = {
     "date",
     "transactiondate",
     "data tranzactiei",
+    "data tranzac iei",
     "data operarii",
     "data procesarii",
   ],
@@ -95,6 +96,13 @@ const HEADERS = {
 } as const;
 
 type Field = keyof typeof HEADERS;
+
+const TRANSACTION_DATE_HEADERS = new Set([
+  "data tranzactiei",
+  "data tranzac iei",
+  "transaction date",
+  "transactiondate",
+]);
 
 const INCOME_WORDS = new Set([
   "venit",
@@ -322,7 +330,8 @@ export function detectColumnsByHeader(
       const name = normalize(cellText(cell));
       for (const field of FIELDS) {
         if (
-          found[field] === undefined &&
+          (found[field] === undefined ||
+            (field === "date" && TRANSACTION_DATE_HEADERS.has(name))) &&
           (HEADERS[field] as readonly string[]).includes(name)
         ) {
           found[field] = index;
@@ -334,6 +343,9 @@ export function detectColumnsByHeader(
       found.amount !== undefined ||
       found.debit !== undefined ||
       found.credit !== undefined;
+    if (found.debit !== undefined || found.credit !== undefined) {
+      delete found.amount;
+    }
     if (
       found.date !== undefined &&
       found.description !== undefined &&
@@ -483,25 +495,44 @@ export function buildDrafts(
   };
   const cutAt = mapping.descriptionCutAt || inferDescriptionCut(rows, mapping);
 
-  // Fără coloană de tip, semnul sumei decide; dacă nu există sume negative, totul e cheltuială.
-  const hasNegative = dataRows.some(({ cells }) => {
-    const n = parseLooseNumber(cell(cells, "amount"));
-    return n !== null && n < 0;
-  });
+  const hasDirectionColumns = mapping.debit != null || mapping.credit != null;
+  // Fără coloane debit/credit sau tip, semnul sumei decide; dacă nu există sume negative, totul e cheltuială.
+  const hasNegative =
+    !hasDirectionColumns &&
+    dataRows.some(({ cells }) => {
+      const n = parseLooseNumber(cell(cells, "amount"));
+      return n !== null && n < 0;
+    });
 
   const drafts = dataRows.map(({ cells, sourceRow }) => {
-    let signed = parseLooseNumber(cell(cells, "amount"));
     let explicitType = parseTypeWord(cell(cells, "type"));
-    if (signed === null) {
+    let signed: number | null;
+    if (hasDirectionColumns) {
       const credit = parseLooseNumber(cell(cells, "credit"));
       const debit = parseLooseNumber(cell(cells, "debit"));
-      if (credit !== null && credit !== 0) {
+      if (
+        explicitType === "INCOME" &&
+        credit !== null &&
+        credit !== 0
+      ) {
+        signed = Math.abs(credit);
+      } else if (
+        explicitType === "EXPENSE" &&
+        debit !== null &&
+        debit !== 0
+      ) {
+        signed = Math.abs(debit);
+      } else if (credit !== null && credit !== 0) {
         signed = Math.abs(credit);
         explicitType ??= "INCOME";
       } else if (debit !== null && debit !== 0) {
         signed = Math.abs(debit);
         explicitType ??= "EXPENSE";
+      } else {
+        signed = null;
       }
+    } else {
+      signed = parseLooseNumber(cell(cells, "amount"));
     }
 
     const categoryName = normalize(cellText(cell(cells, "category")));

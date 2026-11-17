@@ -47,6 +47,7 @@ public class TransactionImportAiService {
               date). Rows above it (empty rows, a sheet title like "Transactions", bank name, account number, ...) are
               ignored, so headerRow can be greater than 1.
             - "date": the transaction date column (it may also contain a time).
+              If both transaction date and processing/posting date columns exist, choose the transaction date.
             - "description": the text saying what the transaction was: the merchant, payee, beneficiary or details
               column (Romanian titles: "Descriere", "Detalii tranzactie", "Beneficiar", "Comerciant", "Nume",
               "Referinta"). It must be a column of text, never a column of numbers (amounts), dates, ids, IBANs,
@@ -56,8 +57,9 @@ public class TransactionImportAiService {
               If the column is named like a merchant or payee, it is the description.
             - "amount": ONE column with the amount of money (expenses may be negative). Amounts are numbers, maybe with
               a decimal comma (20,5).
-              If the file instead has separate money-out and money-in columns, set "debit" (money out) and "credit"
-              (money in) and leave "amount" null.
+              If the file has separate money-out and money-in columns (often named "Debit" and "Credit"), set those
+              fields and leave "amount" null, even if a generic "Suma" or account-balance column is also present.
+              Never use a running account balance ("Sold") as the transaction amount, debit or credit.
             - "descriptionCutAt": the description should be short and clear, only the name of the merchant or payee.
               Bank statements often write "MERCHANT, CITY, COUNTY" (e.g. "OMV 1923, CLUJ, CLUJ" or
               "PRIMARK 884 CLUJ NAPOC, FLORESTI, FLORESTI"). When the description cells hold the name followed by more
@@ -67,8 +69,7 @@ public class TransactionImportAiService {
               a short name.
             - "type": a column saying income/expense (or debit/credit) for each row; otherwise null.
               "category": a column with a category name; otherwise null.
-            - If several columns hold the same kind of value (e.g. the amount in the account currency and in the
-              transaction currency), pick the first one.
+            - If several columns hold amounts, choose the transaction amount, not a running account balance.
             - Rows that are not transactions (totals, balances, notes, footers, rows with most of the date, description
               and amount cells empty) are ignored by the app, so ignore them too when choosing the columns.
             - Use null for everything that is not present. Never use one column for two fields.

@@ -93,6 +93,46 @@ describe("loadImport", () => {
     });
   });
 
+  it("înlocuiește data și coloanele debit/credit AI cu antetele explicite", async () => {
+    const ai = fakeAi({
+      detectColumns: vi.fn().mockResolvedValue({
+        headerRow: 1,
+        date: 0,
+        description: 2,
+        amount: 6,
+        debit: 4,
+        credit: 6,
+        dateFormat: "DMY",
+      }),
+    });
+    const loaded = await loadImport(
+      csvFile(
+        [
+          "Data procesarii;Data tranzac?iei;Descriere;Referinta;Debit;Credit;Suma",
+          '16.11.2026;14.11.2026;"Plata la POS;POS LIDL";ref-1;51.76;;-14,436.36',
+          '13.11.2026;12.11.2026;"Transfer salariu";ref-2;;1000.00;-13,459.79',
+        ].join("\n"),
+      ),
+      categories,
+      ai,
+    );
+
+    expect(loaded.mappingSource).toBe("ai");
+    expect(loaded.drafts).toMatchObject([
+      {
+        transactionDate: "2026-11-14",
+        description: "POS LIDL",
+        amount: "51.76",
+        type: "EXPENSE",
+      },
+      {
+        transactionDate: "2026-11-12",
+        amount: "1000",
+        type: "INCOME",
+      },
+    ]);
+  });
+
   it("ignoră maparea AI care pune suma la descriere și folosește titlurile", async () => {
     const ai = fakeAi({
       detectColumns: vi.fn().mockResolvedValue({

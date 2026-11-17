@@ -150,6 +150,59 @@ describe("buildDrafts", () => {
     ]);
   });
 
+  it("preferă data tranzacției și Debit/Credit față de soldul din coloana Suma", () => {
+    const rows = [
+      [
+        "Data procesarii",
+        "Data tranzac?iei",
+        "Descriere",
+        "Referinta tranzactiei",
+        "Debit",
+        "Credit",
+        "Suma",
+      ],
+      [
+        "16.11.2026",
+        "14.11.2026",
+        "Plata la POS;POS LIDL",
+        "ref-1",
+        "51.76",
+        "",
+        "-14,436.36",
+      ],
+      [
+        "13.11.2026",
+        "12.11.2026",
+        "Transfer salariu",
+        "ref-2",
+        "",
+        "1000.00",
+        "-13,459.79",
+      ],
+    ];
+    const mapping = detectColumnsByHeader(rows);
+    expect(mapping).toMatchObject({
+      headerRow: 1,
+      date: 1,
+      debit: 4,
+      credit: 5,
+    });
+    expect(mapping?.amount).toBeUndefined();
+    expect(buildDrafts(rows, categories, mapping)).toMatchObject([
+      {
+        transactionDate: "2026-11-14",
+        description: "POS LIDL",
+        amount: "51.76",
+        type: "EXPENSE",
+      },
+      {
+        transactionDate: "2026-11-12",
+        amount: "1000",
+        type: "INCOME",
+      },
+    ]);
+  });
+
   it("raportează coloanele lipsă și fișierele goale", () => {
     expect(() =>
       buildDrafts([["Foo", "Bar"], ["1", "2"]], categories),
