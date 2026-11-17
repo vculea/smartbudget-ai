@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { transactionImportAiApi } from "../../../api";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { TransactionsPage } from "../TransactionsPage";
 import { TransactionsImportPage } from "./TransactionsImportPage";
@@ -23,6 +24,30 @@ const renderImport = () =>
   );
 
 describe("TransactionsImportPage", () => {
+  it("anulează cererea AI când părăsești pagina în timpul recunoașterii coloanelor", async () => {
+    const user = userEvent.setup();
+    let requestSignal: AbortSignal | undefined;
+    const detectColumns = vi
+      .spyOn(transactionImportAiApi, "detectColumns")
+      .mockImplementation((_rows, options) => {
+        requestSignal = options?.signal;
+        return new Promise(() => {});
+      });
+    const page = renderImport();
+
+    await user.upload(
+      screen.getByLabelText("Fișier de importat"),
+      new File([CSV], "extras.csv", { type: "text/csv" }),
+    );
+    await waitFor(() => expect(detectColumns).toHaveBeenCalled());
+    expect(requestSignal?.aborted).toBe(false);
+
+    page.unmount();
+
+    expect(requestSignal?.aborted).toBe(true);
+    detectColumns.mockRestore();
+  });
+
   it("afișează previzualizarea, cere corectarea rândurilor invalide și apoi salvează", async () => {
     const user = userEvent.setup();
     renderImport();

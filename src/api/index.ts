@@ -58,14 +58,14 @@ export const transactionsApi: TransactionsApi = env.demoMode
 export const transactionImportAiApi: TransactionImportAiApi = env.demoMode
   ? mockTransactionImportAiApi
   : {
-      detectColumns: (rows) =>
+      detectColumns: (rows, options) =>
         getBrowserAiConfig(loadAiSettings())
-          ? localImportAiApi.detectColumns(rows)
-          : httpImportAiApi.detectColumns(rows),
-      suggestCategories: (items) =>
+          ? localImportAiApi.detectColumns(rows, options)
+          : httpImportAiApi.detectColumns(rows, options),
+      suggestCategories: (items, options) =>
         getBrowserAiConfig(loadAiSettings())
-          ? localImportAiApi.suggestCategories(items)
-          : httpImportAiApi.suggestCategories(items),
+          ? localImportAiApi.suggestCategories(items, options)
+          : httpImportAiApi.suggestCategories(items, options),
     };
 export const categoriesApi: CategoriesApi = env.demoMode
   ? mockCategoriesApi

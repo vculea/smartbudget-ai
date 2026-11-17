@@ -49,13 +49,18 @@ export async function loadImport(
   file: File,
   categories: Category[],
   ai: TransactionImportAiApi = transactionImportAiApi,
+  signal?: AbortSignal,
 ): Promise<LoadedImport> {
   const rows = await readImportFile(file);
   let aiMapping;
   let aiFailure = "";
   try {
-    aiMapping = await ai.detectColumns(sampleRowsForAi(rows));
+    const sample = sampleRowsForAi(rows);
+    aiMapping = signal
+      ? await ai.detectColumns(sample, { signal })
+      : await ai.detectColumns(sample);
   } catch (error) {
+    if (signal?.aborted) throw error;
     aiFailure = getErrorMessage(error, "AI-ul nu este disponibil.");
   }
   if (aiMapping) {
@@ -210,19 +215,23 @@ export async function suggestMissingCategories(
   isCancelled: () => boolean,
   ai: TransactionImportAiApi = transactionImportAiApi,
   batchSize?: number,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const batches = categoryBatches(drafts, batchSize);
   const total = batches.reduce((sum, b) => sum + b.items.length, 0);
   let done = 0;
   for (const batch of batches) {
-    if (isCancelled()) return null;
+    if (isCancelled() || signal?.aborted) return null;
     let suggestions;
     try {
-      suggestions = await ai.suggestCategories(batch.items);
+      suggestions = signal
+        ? await ai.suggestCategories(batch.items, { signal })
+        : await ai.suggestCategories(batch.items);
     } catch (error) {
+      if (signal?.aborted) return null;
       return getErrorMessage(error, "AI-ul nu a putut alege categoriile.");
     }
-    if (isCancelled()) return null;
+    if (isCancelled() || signal?.aborted) return null;
     const updates = new Map<string, CategoryUpdate>();
     for (const item of batch.items) {
       const categoryId =

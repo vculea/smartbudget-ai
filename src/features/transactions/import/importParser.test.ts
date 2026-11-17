@@ -104,6 +104,21 @@ describe("buildDrafts", () => {
     expect(draft?.type).toBe("EXPENSE");
   });
 
+  it("păstrează din descriere doar textul de după primul „;”", () => {
+    const drafts = buildDrafts(
+      [
+        ["Date", "Description", "Amount"],
+        ["2026-10-03", "Plata la POS;POS 17/11/2026 TID 1 LIDL; Cluj", "40"],
+        ["2026-10-04", "Cinema", "20"],
+      ],
+      categories,
+    );
+    expect(drafts.map((d) => d.description)).toEqual([
+      "POS 17/11/2026 TID 1 LIDL; Cluj",
+      "Cinema",
+    ]);
+  });
+
   it("ignoră rândurile cu prea multe date lipsă, dar păstrează cele incomplete", () => {
     const drafts = buildDrafts(
       [

@@ -150,12 +150,20 @@ export function TransactionsImportPage() {
   }, [rows]);
   // Un import nou sau părăsirea paginii oprește sugestiile AI în curs.
   const runId = useRef(0);
+  const runController = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
+      runController.current?.abort();
       runId.current++;
     },
     [],
   );
+  const startRun = () => {
+    runController.current?.abort();
+    const controller = new AbortController();
+    runController.current = controller;
+    return { id: ++runId.current, signal: controller.signal };
+  };
 
   const reading = phase === "reading";
   const gridHeight = useFitGridHeight(rows !== null, gridRef, footerRef);
@@ -190,6 +198,7 @@ export function TransactionsImportPage() {
   const runSuggestions = async (
     drafts: ImportDraft[],
     id: number,
+    signal: AbortSignal,
     batchSize?: number,
   ) => {
     const pending = drafts.filter((d) => !d.categoryId).length;
@@ -205,6 +214,7 @@ export function TransactionsImportPage() {
       () => id !== runId.current,
       undefined,
       batchSize,
+      signal,
     );
     if (id !== runId.current) return;
     setProgress(null);
@@ -213,17 +223,18 @@ export function TransactionsImportPage() {
 
   // Trimite din nou la AI rândurile bifate fără categorie, în loturi mici ca modelul să se concentreze mai bine.
   const improveAnswer = async () => {
-    const id = ++runId.current;
+    const { id, signal } = startRun();
     await runSuggestions(
       selected.map((row) => row.draft).filter((draft) => !draft.categoryId),
       id,
+      signal,
       RETRY_BATCH,
     );
   };
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    const id = ++runId.current;
+    const { id, signal } = startRun();
     setError(null);
     setNotice(null);
     setCategoryError(null);
@@ -233,8 +244,8 @@ export function TransactionsImportPage() {
     setUnmapped(null);
     setPhase("reading");
     try {
-      const loaded = await loadImport(file, categories);
-      await showLoaded(loaded, file.name, id);
+      const loaded = await loadImport(file, categories, undefined, signal);
+      await showLoaded(loaded, file.name, id, signal);
     } catch (e) {
       handleFailure(e, id, file.name);
     } finally {
@@ -247,7 +258,7 @@ export function TransactionsImportPage() {
     defaultDescription: string,
   ) => {
     if (!unmapped) return;
-    const id = ++runId.current;
+    const { id, signal } = startRun();
     setError(null);
     setPhase("reading");
     try {
@@ -258,7 +269,7 @@ export function TransactionsImportPage() {
         defaultDescription,
       );
       setUnmapped(null);
-      await showLoaded(loaded, unmapped.fileName, id);
+      await showLoaded(loaded, unmapped.fileName, id, signal);
     } catch (e) {
       handleFailure(e, id, unmapped.fileName);
     }
@@ -278,7 +289,12 @@ export function TransactionsImportPage() {
     );
   };
 
-  const showLoaded = async (loaded: LoadedImport, name: string, id: number) => {
+  const showLoaded = async (
+    loaded: LoadedImport,
+    name: string,
+    id: number,
+    signal: AbortSignal,
+  ) => {
     if (id !== runId.current) return;
     setFileName(name);
     setMappingSource(loaded.mappingSource);
@@ -312,6 +328,7 @@ export function TransactionsImportPage() {
         return !(categoryId && byId.get(categoryId)?.type === draft.type);
       }),
       id,
+      signal,
     );
   };
 

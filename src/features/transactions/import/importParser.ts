@@ -348,13 +348,19 @@ export function detectColumnsByHeader(
 const squeeze = (text: string) => text.replace(/\s+/g, " ").trim();
 
 /**
- * Păstrează din descriere doar textul de dinaintea primei apariții a separatorului (ales de AI sau dedus)
+ * Dacă descrierea conține „;", păstrează doar textul de după prima apariție (ex. „Plata la POS;POS 17/11 LIDL" → „POS 17/11 LIDL").
+ * Apoi păstrează doar textul de dinaintea primei apariții a separatorului (ales de AI sau dedus)
  * și curăță spațiile multiple.
  */
 export function cutDescription(text: string, cutAt?: string | null): string {
-  const clean = squeeze(text);
-  if (!cutAt) return clean;
-  const index = clean.indexOf(cutAt.trim() || cutAt);
+  const full = squeeze(text);
+  const afterSemicolon = full.includes(";")
+    ? full.slice(full.indexOf(";") + 1).trim()
+    : full;
+  const clean = afterSemicolon || full;
+  const separator = cutAt?.trim() || cutAt;
+  if (!separator || separator === ";") return clean;
+  const index = clean.indexOf(separator);
   const kept = index > 0 ? clean.slice(0, index).trim() : clean;
   return kept || clean;
 }

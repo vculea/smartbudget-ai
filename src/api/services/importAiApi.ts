@@ -9,18 +9,22 @@ import type {
 const AI_TIMEOUT = { timeout: 180_000 };
 
 export const httpImportAiApi: TransactionImportAiApi = {
-  async detectColumns(rows) {
+  async detectColumns(rows, options) {
     const { data } = await http.post<ImportColumnMapping>(
       "/transactions/import/columns",
       { rows },
-      AI_TIMEOUT,
+      { ...AI_TIMEOUT, signal: options?.signal },
     );
     return data;
   },
-  async suggestCategories(items) {
+  async suggestCategories(items, options) {
     const { data } = await http.post<{
       suggestions: ImportCategorySuggestion[];
-    }>("/transactions/import/categories", { items }, AI_TIMEOUT);
+    }>(
+      "/transactions/import/categories",
+      { items },
+      { ...AI_TIMEOUT, signal: options?.signal },
+    );
     return data.suggestions;
   },
 };

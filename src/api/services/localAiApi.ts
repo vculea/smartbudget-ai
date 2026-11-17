@@ -365,38 +365,45 @@ export const localBudgetPlanAiApi: BudgetPlanAiApi = {
 
 // Backendul construiește prompturile și validează răspunsul; doar apelul către model pornește din browser.
 export const localImportAiApi: TransactionImportAiApi = {
-  async detectColumns(rows) {
+  async detectColumns(rows, options = {}) {
     const settings = activeConfig();
     const { data: prompt } = await http.post<ImportPrompt>(
       "/transactions/import/columns/prompt",
       { rows },
+      { signal: options.signal },
     );
     const content = await chat(settings, settings.model, [
       { role: "system", content: prompt.systemPrompt },
       { role: "user", content: prompt.userMessage },
-    ]);
+    ], options);
     const { data } = await http.post<ImportColumnMapping>(
       "/transactions/import/columns/result",
       {
         content,
         columnCount: Math.max(1, ...rows.map((row) => row.length)),
       },
+      { signal: options.signal },
     );
     return data;
   },
-  async suggestCategories(items) {
+  async suggestCategories(items, options = {}) {
     const settings = activeConfig();
     const { data: prompt } = await http.post<ImportPrompt>(
       "/transactions/import/categories/prompt",
       { items },
+      { signal: options.signal },
     );
     const content = await chat(settings, settings.model, [
       { role: "system", content: prompt.systemPrompt },
       { role: "user", content: prompt.userMessage },
-    ]);
+    ], options);
     const { data } = await http.post<{
       suggestions: ImportCategorySuggestion[];
-    }>("/transactions/import/categories/result", { content, items });
+    }>(
+      "/transactions/import/categories/result",
+      { content, items },
+      { signal: options.signal },
+    );
     return data.suggestions;
   },
 };

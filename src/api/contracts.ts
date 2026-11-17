@@ -62,10 +62,14 @@ export interface DriveApi {
 
 export interface TransactionImportAiApi {
   /** AI-ul recunoaște coloanele din primele rânduri ale fișierului. */
-  detectColumns(rows: string[][]): Promise<ImportColumnMapping>;
+  detectColumns(
+    rows: string[][],
+    options?: Pick<ScanOptions, "signal">,
+  ): Promise<ImportColumnMapping>;
   /** AI-ul propune categorii (maxim 60 de tranzacții); `categoryId: null` = nu e sigur. */
   suggestCategories(
     items: ImportCategoryItem[],
+    options?: Pick<ScanOptions, "signal">,
   ): Promise<ImportCategorySuggestion[]>;
 }
 
