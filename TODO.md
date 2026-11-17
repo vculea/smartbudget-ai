@@ -1,3 +1,3 @@
-1. Login with google credentials
+1.
 2.
 3.

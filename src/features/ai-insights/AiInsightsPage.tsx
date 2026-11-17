@@ -1,5 +1,6 @@
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Card,
@@ -13,7 +14,7 @@ import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { useSelectedPeriod } from "../../app/PeriodContext";
 import { palette } from "../../app/theme";
-import { getErrorMessage } from "../../api";
+import { ApiError, getErrorMessage } from "../../api";
 import { useAiSettings } from "../../config/aiSettings";
 import { ErrorState } from "../../components/common/ErrorState";
 import { LoadingBlock } from "../../components/common/LoadingBlock";
@@ -35,6 +36,8 @@ import { useAiAnalysis } from "./hooks";
 import { RecommendationCard } from "./RecommendationCard";
 
 const GOAL_HORIZON_MONTHS = 6;
+const NO_TRANSACTIONS_MESSAGE =
+  "Nu există tranzacții în perioada selectată pentru a genera recomandări.";
 
 function toGoalDraft(recommendation: AiRecommendation): GoalFormInitialValues {
   return {
@@ -62,6 +65,10 @@ export function AiInsightsPage() {
   };
 
   const result = analysis.data;
+  const noTransactions =
+    analysis.error instanceof ApiError &&
+    analysis.error.status === 422 &&
+    analysis.error.message === NO_TRANSACTIONS_MESSAGE;
 
   return (
     <>
@@ -150,7 +157,37 @@ export function AiInsightsPage() {
           </SectionCard>
         )}
 
-        {analysis.isError && (
+        {analysis.isError && noTransactions && (
+          <Alert severity="info" variant="outlined" sx={{ borderRadius: 3 }}>
+            <AlertTitle>Nu există tranzacții în luna selectată</AlertTitle>
+            <Stack spacing={1.5}>
+              <Typography>
+                Obiectivul este să introduci date în luna selectată (
+                {formatPeriodLabel(period)}). Adaugă tranzacții sau importă un
+                fișier pentru a primi recomandări AI.
+              </Typography>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <Button
+                  component={RouterLink}
+                  to="/transactions"
+                  variant="contained"
+                  size="small"
+                >
+                  Adaugă tranzacții
+                </Button>
+                <Button
+                  component={RouterLink}
+                  to="/transactions/import"
+                  size="small"
+                >
+                  Importă tranzacții
+                </Button>
+              </Stack>
+            </Stack>
+          </Alert>
+        )}
+
+        {analysis.isError && !noTransactions && (
           <ErrorState
             title="Analiza nu a putut fi finalizată"
             message={getErrorMessage(analysis.error)}
